@@ -1,0 +1,97 @@
+.progressContainer {
+  @apply flex justify-center mb-16;
+}
+
+.progressWrapper {
+  @apply flex items-center space-x-4 bg-white/10 backdrop-blur-xl rounded-2xl p-6 shadow-2xl;
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.stepContainer {
+  @apply flex items-center;
+}
+
+.stepButton {
+  @apply flex items-center justify-center w-16 h-16 rounded-xl transition-all duration-300 cursor-pointer;
+  border: 2px solid transparent;
+  position: relative;
+  overflow: hidden;
+}
+
+.stepButton::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(45deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+  transform: translateX(-100%);
+  transition: transform 0.6s;
+}
+
+.stepButton:hover::before {
+  transform: translateX(100%);
+}
+
+.stepButton.current {
+  @apply bg-gradient-to-br from-purple-500 to-blue-500 text-white shadow-lg;
+  transform: scale(1.1);
+  box-shadow: 0 0 30px rgba(139, 92, 246, 0.5);
+}
+
+.stepButton.completed {
+  @apply bg-green-500 text-white;
+}
+
+.stepButton.pending {
+  @apply bg-gray-600 text-gray-300;
+}
+
+.stepButton.pending:hover {
+  @apply bg-gray-500;
+}
+
+.stepIcon {
+  @apply text-2xl;
+  transition: transform 0.3s ease;
+}
+
+.stepButton:hover .stepIcon {
+  transform: scale(1.1);
+}
+
+.stepLabel {
+  @apply ml-3 font-semibold transition-all duration-300;
+}
+
+.stepLabel.current {
+  @apply text-white;
+}
+
+.stepLabel.pending {
+  @apply text-gray-400;
+}
+
+.stepLabel.hidden {
+  @apply hidden;
+}
+
+.stepConnector {
+  @apply w-12 h-1 rounded transition-all duration-500;
+}
+
+.stepConnector.completed {
+  @apply bg-green-500;
+}
+
+.stepConnector.pending {
+  @apply bg-gray-600;
+}
+
+@media (max-width: 640px) {
+  .stepLabel {
+    @apply hidden;
+  }
+}
