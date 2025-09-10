@@ -69,7 +69,7 @@ export function HelpModal({ showHelp, setShowHelp }) {
   );
 }
 
-export function SettingsModal({ showSettings, setShowSettings, autoSave, setAutoSave, imageQuality, setImageQuality, keyboardShortcuts, setKeyboardShortcuts }) {
+export function SettingsModal({ showSettings, setShowSettings, autoSave, setAutoSave, imageQuality, setImageQuality, keyboardShortcuts, setKeyboardShortcuts, selectedYoloModel, setSelectedYoloModel }) {
   if (!showSettings) return null;
 
   return (
@@ -163,6 +163,51 @@ export function SettingsModal({ showSettings, setShowSettings, autoSave, setAuto
                   />
                   <span className={styles.toggleSlider}></span>
                 </label>
+              </div>
+            </div>
+
+            {/* YOLO Model Selection */}
+            <div className={styles.settingItem}>
+              <div className={styles.settingHeader}>
+                <div className={styles.settingLeft}>
+                  <div className={`${styles.settingIcon} ${styles.yoloModel}`}>
+                    <Image />
+                  </div>
+                  <div className={styles.settingInfo}>
+                    <div className={styles.settingName}>YOLO Model</div>
+                    <div className={styles.settingDescription}>Choose the YOLO model for training</div>
+                  </div>
+                </div>
+              </div>
+              <div className={styles.yoloModelGrid}>
+                {[
+                  { id: 'yolov8', name: 'YOLOv8', description: 'Ultralytics anchor-free detection' },
+                  { id: 'yolov9', name: 'YOLOv9', description: 'PGI & GELAN architecture' },
+                  { id: 'yolov10', name: 'YOLOv10', description: 'NMS-free detection' },
+                  { id: 'yolov11', name: 'YOLOv11', description: 'Latest with C3k2 & C2PSA' }
+                ].map((model) => (
+                  <button
+                    key={model.id}
+                    onClick={() => setSelectedYoloModel(model.id)}
+                    className={`${styles.yoloModelOption} ${selectedYoloModel === model.id ? styles.selected : ''}`}
+                  >
+                    <div className={styles.yoloModelHeader}>
+                      <div className={styles.yoloModelName}>{model.name}</div>
+                      {selectedYoloModel === model.id && (
+                        <div className={styles.selectedIndicator}>✓</div>
+                      )}
+                    </div>
+                    <div className={styles.yoloModelDescription}>{model.description}</div>
+                  </button>
+                ))}
+              </div>
+              <div className={styles.yoloModelInfo}>
+                <div className={styles.currentModel}>
+                  <strong>Current:</strong> {selectedYoloModel.toUpperCase()}
+                </div>
+                <div className={styles.modelRecommendation}>
+                  This selection affects your exported data.yaml and training commands.
+                </div>
               </div>
             </div>
           </div>

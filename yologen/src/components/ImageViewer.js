@@ -23,7 +23,9 @@ export default function ImageViewer({
   removeAnnotation,
   classes,
   selectedClass,
-  setSelectedClass
+  setSelectedClass,
+  imageCategories,
+  setImageCategories
 }) {
   if (!currentImage) {
     return (
@@ -119,15 +121,27 @@ export default function ImageViewer({
           
           {/* Drawing overlay */}
           {drawingBox && (
-            <div
-              className={styles.drawingOverlay}
-              style={{
-                left: Math.min(drawingBox.x1, drawingBox.x2) * zoom,
-                top: Math.min(drawingBox.y1, drawingBox.y2) * zoom,
-                width: Math.abs(drawingBox.x2 - drawingBox.x1) * zoom,
-                height: Math.abs(drawingBox.y2 - drawingBox.y1) * zoom
-              }}
-            />
+            <>
+              <div
+                className={styles.drawingOverlay}
+                style={{
+                  left: Math.min(drawingBox.x1, drawingBox.x2) * zoom,
+                  top: Math.min(drawingBox.y1, drawingBox.y2) * zoom,
+                  width: Math.abs(drawingBox.x2 - drawingBox.x1) * zoom,
+                  height: Math.abs(drawingBox.y2 - drawingBox.y1) * zoom
+                }}
+              />
+              <div
+                className={styles.drawingInfo}
+                style={{
+                  left: Math.min(drawingBox.x1, drawingBox.x2) * zoom
+                }}
+              >
+                📦 Drawing: {classes[selectedClass] || 'Unknown'} •
+                📏 {(Math.abs(drawingBox.x2 - drawingBox.x1)).toFixed(3)} × {(Math.abs(drawingBox.y2 - drawingBox.y1)).toFixed(3)} •
+                📐 {(Math.abs(drawingBox.x2 - drawingBox.x1) * Math.abs(drawingBox.y2 - drawingBox.y1) * 100).toFixed(1)}%
+              </div>
+            </>
           )}
           
           {/* Existing annotations */}
@@ -143,7 +157,22 @@ export default function ImageViewer({
               }}
               onClick={() => selectAnnotation(index)}
               title={`${classes[annotation.classId] || 'Unknown'} - Click to select, Delete to remove`}
-            />
+            >
+              {/* Class label */}
+              <div className={styles.annotationLabel}>
+                {classes[annotation.classId] || 'Unknown'}
+              </div>
+
+              {/* Resize handles - only show for selected annotation */}
+              {selectedAnnotation === index && (
+                <>
+                  <div className={`${styles.resizeHandle} ${styles.nw}`} />
+                  <div className={`${styles.resizeHandle} ${styles.ne}`} />
+                  <div className={`${styles.resizeHandle} ${styles.sw}`} />
+                  <div className={`${styles.resizeHandle} ${styles.se}`} />
+                </>
+              )}
+            </div>
           ))}
         </div>
         
@@ -169,13 +198,62 @@ export default function ImageViewer({
           </select>
         </div>
 
+        {/* Image Category Selection */}
+        <div className={styles.categorySelection}>
+          <label className={styles.categoryLabel}>Dataset Category:</label>
+          <div className={styles.categoryButtons}>
+            {[
+              { id: 'train', label: 'Training', emoji: '🎯', color: 'green', desc: 'Used for training the model' },
+              { id: 'valid', label: 'Validation', emoji: '🔍', color: 'blue', desc: 'Used for validating during training' },
+              { id: 'test', label: 'Test', emoji: '🧪', color: 'purple', desc: 'Used for final evaluation' }
+            ].map((category) => (
+              <button
+                key={category.id}
+                onClick={() => {
+                  const newCategories = { ...imageCategories };
+                  newCategories[currentImage.id] = category.id;
+                  setImageCategories(newCategories);
+                }}
+                className={`${styles.categoryButton} ${styles[`category${category.id}`]} ${
+                  imageCategories[currentImage.id] === category.id ? styles.categorySelected : ''
+                }`}
+                title={category.desc}
+              >
+                <span className={styles.categoryEmoji}>{category.emoji}</span>
+                <span className={styles.categoryText}>{category.label}</span>
+                <span className={styles.categoryDesc}>{category.desc}</span>
+              </button>
+            ))}
+          </div>
+          <div className={styles.categoryStats}>
+            <div className={styles.categoryStat}>
+              <span className={styles.categoryStatIcon}>🎯</span>
+              <span className={styles.categoryStatText}>
+                Training: {Object.values(imageCategories).filter(cat => cat === 'train').length}
+              </span>
+            </div>
+            <div className={styles.categoryStat}>
+              <span className={styles.categoryStatIcon}>🔍</span>
+              <span className={styles.categoryStatText}>
+                Validation: {Object.values(imageCategories).filter(cat => cat === 'valid').length}
+              </span>
+            </div>
+            <div className={styles.categoryStat}>
+              <span className={styles.categoryStatIcon}>🧪</span>
+              <span className={styles.categoryStatText}>
+                Test: {Object.values(imageCategories).filter(cat => cat === 'test').length}
+              </span>
+            </div>
+          </div>
+        </div>
+
         {/* Current Annotations */}
         <div className={styles.annotationsSection}>
           <h3 className={styles.annotationsTitle}>
             <span>Annotations ({currentAnnotations.length})</span>
             {currentAnnotations.length > 0 && (
               <span className={styles.annotationsSubtitle}>
-                • Click to select • Delete to remove
+                • Click to select • Delete to remove • Drag corners to resize
               </span>
             )}
           </h3>
@@ -187,7 +265,23 @@ export default function ImageViewer({
                   <span>📦</span>
                 </div>
                 <p className={styles.emptyAnnotationsTitle}>No annotations yet</p>
-                <p className={styles.emptyAnnotationsDescription}>Draw bounding boxes on the image above</p>
+                <p className={styles.emptyAnnotationsDescription}>
+                  Click and drag on the image to draw bounding boxes
+                </p>
+                <div className={styles.shortcuts}>
+                  <div className={styles.shortcutItem}>
+                    <span className={styles.shortcutKey}>Click + Drag</span>
+                    <span className={styles.shortcutDesc}>Draw bounding box</span>
+                  </div>
+                  <div className={styles.shortcutItem}>
+                    <span className={styles.shortcutKey}>Delete</span>
+                    <span className={styles.shortcutDesc}>Remove selected box</span>
+                  </div>
+                  <div className={styles.shortcutItem}>
+                    <span className={styles.shortcutKey}>1-9</span>
+                    <span className={styles.shortcutDesc}>Switch class</span>
+                  </div>
+                </div>
               </div>
             ) : (
               currentAnnotations.map((annotation, index) => (
@@ -206,8 +300,13 @@ export default function ImageViewer({
                         <span className={styles.annotationName}>
                           {classes[annotation.classId] || 'Unknown'}
                         </span>
-                        <div className={styles.annotationCoords}>
-                          ({annotation.x1.toFixed(3)}, {annotation.y1.toFixed(3)}) to ({annotation.x2.toFixed(3)}, {annotation.y2.toFixed(3)})
+                        <div className={styles.annotationMetrics}>
+                          <div className={styles.annotationSize}>
+                            📏 {(annotation.x2 - annotation.x1).toFixed(3)} × {(annotation.y2 - annotation.y1).toFixed(3)}
+                          </div>
+                          <div className={styles.annotationArea}>
+                            📐 {((annotation.x2 - annotation.x1) * (annotation.y2 - annotation.y1) * 100).toFixed(1)}%
+                          </div>
                         </div>
                       </div>
                     </div>

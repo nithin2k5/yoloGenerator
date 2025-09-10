@@ -326,6 +326,10 @@
   background: linear-gradient(135deg, #f59e0b, #d97706);
 }
 
+.settingIcon.yoloModel {
+  background: linear-gradient(135deg, #10b981, #059669);
+}
+
 .settingInfo {
   display: flex;
   flex-direction: column;
@@ -586,6 +590,110 @@ input:checked + .toggleSlider:before {
   background: rgba(156, 163, 175, 0.8);
 }
 
+/* YOLO Model Selection Styles */
+.yoloModelGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.yoloModelOption {
+  padding: 1rem;
+  border: 2px solid rgba(229, 231, 235, 1);
+  border-radius: 0.75rem;
+  background: #ffffff;
+  text-align: left;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.dark .yoloModelOption {
+  background: #374151;
+  border-color: rgba(75, 85, 99, 1);
+}
+
+.yoloModelOption:hover {
+  border-color: #3b82f6;
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px -5px rgba(59, 130, 246, 0.1);
+}
+
+.yoloModelOption.selected {
+  border-color: #10b981;
+  background: rgba(16, 185, 129, 0.1);
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
+}
+
+.yoloModelHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.yoloModelName {
+  font-weight: 600;
+  color: #111827;
+}
+
+.dark .yoloModelName {
+  color: #f9fafb;
+}
+
+.yoloModelDescription {
+  font-size: 0.875rem;
+  color: #6b7280;
+  line-height: 1.4;
+}
+
+.dark .yoloModelDescription {
+  color: #9ca3af;
+}
+
+.selectedIndicator {
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  background: #10b981;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: bold;
+  font-size: 0.75rem;
+}
+
+.yoloModelInfo {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  background: rgba(243, 244, 246, 1);
+  border-radius: 0.5rem;
+}
+
+.dark .yoloModelInfo {
+  background: rgba(55, 65, 81, 1);
+}
+
+.currentModel {
+  font-size: 0.875rem;
+  color: #374151;
+  margin-bottom: 0.5rem;
+}
+
+.dark .currentModel {
+  color: #d1d5db;
+}
+
+.modelRecommendation {
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+.dark .modelRecommendation {
+  color: #9ca3af;
+}
+
 /* Print Styles */
 @media print {
   .modalOverlay {
@@ -593,7 +701,7 @@ input:checked + .toggleSlider:before {
     background: none;
     backdrop-filter: none;
   }
-  
+
   .modalContainer {
     box-shadow: none;
     border: 1px solid #000;
