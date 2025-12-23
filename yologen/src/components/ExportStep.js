@@ -11,7 +11,8 @@ export default function ExportStep({
   exportDataset,
   isExporting,
   exportProgress,
-  totalAnnotations
+  totalAnnotations,
+  imageCategories = {}
 }) {
   const [showTraining, setShowTraining] = useState(false);
   const progressPercentage = images.length > 0 ? (totalAnnotations / (images.length * 5)) * 100 : 0;

@@ -7,3 +7,6 @@ export { default as AnnotateStep } from './AnnotateStep';
 export { default as ExportStep } from './ExportStep';
 export { default as TrainingModal } from './TrainingModal';
 export { default as ModelPerformance } from './ModelPerformance';
+export { default as BatchAnnotation } from './BatchAnnotation';
+export { default as KeyboardShortcuts } from './KeyboardShortcuts';
+export { default as AnnotationQuality } from './AnnotationQuality';

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { MdAdd, MdClose } from 'react-icons/md';
 
 export default function ClassesStep({ classes, newClass, setNewClass, addClass, removeClass }) {
   return (
@@ -19,8 +20,9 @@ export default function ClassesStep({ classes, newClass, setNewClass, addClass, 
           />
           <button
             onClick={addClass}
-            className="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-500 rounded-xl text-white font-semibold hover:from-blue-600 hover:to-purple-600 transition-all duration-200 transform hover:scale-105 active:scale-95 shadow-lg hover:shadow-xl"
+            className="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-500 rounded-xl text-white font-semibold hover:from-blue-600 hover:to-purple-600 transition-all duration-200 transform hover:scale-105 active:scale-95 shadow-lg hover:shadow-xl flex items-center gap-2"
           >
+            <MdAdd className="w-5 h-5" />
             Add Class
           </button>
         </div>
@@ -36,7 +38,7 @@ export default function ClassesStep({ classes, newClass, setNewClass, addClass, 
                     onClick={() => removeClass(index)}
                     className="text-red-500 hover:text-red-700 hover:bg-red-100 dark:hover:bg-red-900/30 p-1 rounded transition-all duration-200"
                   >
-                    ✕
+                    <MdClose className="w-5 h-5" />
                   </button>
                 </div>
               ))}
