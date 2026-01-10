@@ -1,0 +1,46 @@
+# YOLO Dataset Configuration Example
+# This file defines the dataset structure for training
+
+# Dataset paths
+path: ./datasets/custom  # Dataset root directory
+train: images/train      # Train images (relative to 'path')
+val: images/val          # Validation images (relative to 'path')
+
+# Class names
+names:
+  0: person
+  1: bicycle
+  2: car
+  3: motorcycle
+  4: airplane
+  5: bus
+  6: train
+  7: truck
+
+# Number of classes
+nc: 8
+
+# Instructions:
+# 1. Organize your images in the following structure:
+#    datasets/custom/
+#    ├── images/
+#    │   ├── train/
+#    │   │   ├── image1.jpg
+#    │   │   └── image2.jpg
+#    │   └── val/
+#    │       ├── image3.jpg
+#    │       └── image4.jpg
+#    └── labels/
+#        ├── train/
+#        │   ├── image1.txt
+#        │   └── image2.txt
+#        └── val/
+#            ├── image3.txt
+#            └── image4.txt
+#
+# 2. Each label file should contain one line per object:
+#    class_id center_x center_y width height
+#    (all values normalized to 0-1)
+#
+# 3. Upload this YAML file in the Training tab
+
