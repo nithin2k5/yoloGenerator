@@ -697,21 +697,10 @@ export default function DatasetWorkflow({ dataset, onRefresh }) {
                 className="w-full bg-green-600 hover:bg-green-700 text-white"
                 size="lg"
                 onClick={async () => {
-                  if (!confirm("Ready to start training?\n\nThis will:\n1. Export your dataset (if not already done)\n2. Start training with YOLOv8\n3. Monitor progress in Training tab\n\nContinue?")) return;
+                  if (!confirm("Ready to start training?\n\nThis will:\n1. Automatically export your dataset (if not already done)\n2. Start training with YOLOv8\n3. Monitor progress in Training tab\n\nContinue?")) return;
                   
                   try {
-                    // Export first (ensure it's exported)
-                    const exportResponse = await fetch(`http://localhost:8000/api/annotations/datasets/${dataset.id}/export`, {
-                      method: "POST"
-                    });
-                    const exportData = await exportResponse.json();
-                    
-                    if (!exportData.success) {
-                      alert("Failed to export dataset. Please try exporting manually first.");
-                      return;
-                    }
-                    
-                    // Start training
+                    // Start training - endpoint will auto-export if needed
                     const trainingResponse = await fetch("http://localhost:8000/api/training/start-from-dataset", {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
@@ -736,7 +725,8 @@ export default function DatasetWorkflow({ dataset, onRefresh }) {
                       alert(`Error: ${trainData.detail || "Failed to start training"}`);
                     }
                   } catch (error) {
-                    alert("Error starting training. Make sure backend is running and dataset is exported.");
+                    console.error("Training error:", error);
+                    alert("Error starting training. Make sure backend is running and dataset has annotated images.");
                   }
                 }}
               >

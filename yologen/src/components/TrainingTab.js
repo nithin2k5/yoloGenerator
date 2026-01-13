@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { FiUpload, FiPlay, FiRefreshCw, FiCpu, FiCheckCircle, FiXCircle, FiClock } from "react-icons/fi";
+import { FiUpload, FiPlay, FiRefreshCw, FiCpu, FiCheckCircle, FiXCircle, FiClock, FiDownload, FiTrash2, FiEye } from "react-icons/fi";
 
 export default function TrainingTab() {
   const [configFile, setConfigFile] = useState(null);
@@ -17,14 +17,8 @@ export default function TrainingTab() {
   const [batchSize, setBatchSize] = useState(16);
   const [imgSize, setImgSize] = useState(640);
   const [isTraining, setIsTraining] = useState(false);
-  const [trainingJobs, setTrainingJobs] = useState([
-    {
-      job_id: "demo-job-1",
-      status: "completed",
-      config: { epochs: 50, batch_size: 16 },
-      progress: 100
-    }
-  ]);
+  const [trainingJobs, setTrainingJobs] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   const handleConfigChange = (e) => {
     const file = e.target.files[0];
@@ -42,24 +36,15 @@ export default function TrainingTab() {
     setIsTraining(true);
     const formData = new FormData();
     formData.append("dataset_yaml", configFile);
-
-    const config = {
-      epochs: parseInt(epochs),
-      batch_size: parseInt(batchSize),
-      img_size: parseInt(imgSize),
-      model_name: selectedModel
-    };
+    formData.append("epochs", epochs.toString());
+    formData.append("batch_size", batchSize.toString());
+    formData.append("img_size", imgSize.toString());
+    formData.append("model_name", selectedModel);
 
     try {
       const response = await fetch("http://localhost:8000/api/training/start", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          config,
-          dataset_yaml: configFile.name
-        })
+        body: formData
       });
 
       const data = await response.json();
@@ -68,6 +53,8 @@ export default function TrainingTab() {
         alert(`Training job ${data.job_id} started!`);
         // Refresh jobs list
         fetchTrainingJobs();
+      } else {
+        alert(`Error: ${data.detail || "Failed to start training"}`);
       }
     } catch (error) {
       console.error("Training error:", error);
@@ -79,11 +66,53 @@ export default function TrainingTab() {
 
   const fetchTrainingJobs = async () => {
     try {
+      setLoading(true);
       const response = await fetch("http://localhost:8000/api/training/jobs");
-      const data = await response.json();
-      setTrainingJobs(data.jobs || []);
+      if (response.ok) {
+        const data = await response.json();
+        setTrainingJobs(data.jobs || []);
+      } else {
+        console.error("Failed to fetch training jobs");
+        setTrainingJobs([]);
+      }
     } catch (error) {
       console.error("Error fetching jobs:", error);
+      setTrainingJobs([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch jobs on component mount
+  useEffect(() => {
+    fetchTrainingJobs();
+    
+    // Auto-refresh every 3 seconds for running jobs
+    const interval = setInterval(() => {
+      fetchTrainingJobs();
+    }, 3000);
+    
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleDeleteJob = async (jobId) => {
+    if (!confirm(`Delete training job ${jobId.substring(0, 8)}?`)) return;
+    
+    try {
+      const response = await fetch(`http://localhost:8000/api/training/job/${jobId}`, {
+        method: "DELETE"
+      });
+      
+      if (response.ok) {
+        alert("Training job deleted successfully");
+        fetchTrainingJobs();
+      } else {
+        const data = await response.json();
+        alert(`Error: ${data.detail || "Failed to delete job"}`);
+      }
+    } catch (error) {
+      console.error("Error deleting job:", error);
+      alert("Error deleting training job");
     }
   };
 
@@ -253,63 +282,158 @@ export default function TrainingTab() {
                 size="sm"
                 onClick={fetchTrainingJobs}
                 className="border-border"
+                disabled={loading}
               >
-                <FiRefreshCw className="mr-2" />
+                <FiRefreshCw className={`mr-2 ${loading ? 'animate-spin' : ''}`} />
                 Refresh
               </Button>
             </div>
           </CardHeader>
           <CardContent>
-            {trainingJobs.length > 0 ? (
+            {loading ? (
+              <div className="flex flex-col items-center justify-center py-12">
+                <FiRefreshCw className="text-4xl mb-4 animate-spin text-primary" />
+                <p className="text-sm text-muted-foreground">Loading training jobs...</p>
+              </div>
+            ) : trainingJobs.length > 0 ? (
               <div className="space-y-4">
-                {trainingJobs.map((job, index) => (
-                  <div
-                    key={index}
-                    className="p-4 bg-background rounded-lg border border-border hover:border-primary transition-colors"
-                  >
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-center gap-3">
-                        <div className="text-2xl">
-                          {getStatusIcon(job.status)}
+                {trainingJobs.map((job) => {
+                  const jobId = job.job_id || job.id || 'unknown';
+                  return (
+                    <div
+                      key={jobId}
+                      className="p-4 bg-background rounded-lg border border-border hover:border-primary transition-colors"
+                    >
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex items-center gap-3 flex-1">
+                          <div className="text-2xl">
+                            {getStatusIcon(job.status)}
+                          </div>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <p className="font-medium text-sm">Job: {jobId.substring(0, 12)}</p>
+                              <Badge className={`${getStatusColor(job.status)} text-xs`}>
+                                {job.status || 'pending'}
+                              </Badge>
+                              {job.strict_mode && (
+                                <Badge className="bg-yellow-500/20 text-yellow-500 border-yellow-500/30 text-xs">
+                                  Strict Mode
+                                </Badge>
+                              )}
+                            </div>
+                            {job.dataset_id && (
+                              <p className="text-xs text-muted-foreground">
+                                Dataset: {job.dataset_id.substring(0, 8)}...
+                              </p>
+                            )}
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-medium text-sm">Job: {job.job_id?.substring(0, 8) || 'N/A'}</p>
-                          <Badge className={`mt-1 ${getStatusColor(job.status)}`}>
-                            {job.status}
-                          </Badge>
+                        <div className="flex gap-2">
+                          {job.status === "completed" && job.model_path && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                alert(`Model saved at: ${job.model_path}\n\nYou can download it from the Models tab.`);
+                              }}
+                              className="text-primary hover:text-primary"
+                            >
+                              <FiEye className="text-sm" />
+                            </Button>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDeleteJob(jobId)}
+                            className="text-destructive hover:text-destructive"
+                          >
+                            <FiTrash2 className="text-sm" />
+                          </Button>
                         </div>
                       </div>
-                      <FiCpu className="text-muted-foreground" />
-                    </div>
 
-                    {job.status === "running" && (
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between text-xs text-muted-foreground">
-                          <span>Progress</span>
-                          <span>{job.progress || 0}%</span>
+                      {job.status === "running" && (
+                        <div className="space-y-2 mb-3">
+                          <div className="flex items-center justify-between text-xs text-muted-foreground">
+                            <span>Progress</span>
+                            <span>{job.progress || 0}%</span>
+                          </div>
+                          <Progress value={job.progress || 0} className="h-2" />
+                          {job.current_epoch && job.config?.epochs && (
+                            <p className="text-xs text-muted-foreground text-center">
+                              Epoch {job.current_epoch} / {job.config.epochs}
+                            </p>
+                          )}
                         </div>
-                        <Progress value={job.progress || 0} className="h-2" />
-                      </div>
-                    )}
+                      )}
 
-                    <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-                      <div>
-                        <span className="font-medium">Epochs: </span>
-                        {job.config?.epochs || "N/A"}
-                      </div>
-                      <div>
-                        <span className="font-medium">Batch: </span>
-                        {job.config?.batch_size || "N/A"}
+                      <div className="mt-3 space-y-2">
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <div>
+                            <span className="font-medium text-muted-foreground">Epochs: </span>
+                            <span className="text-foreground">{job.config?.epochs || job.epochs || "N/A"}</span>
+                          </div>
+                          <div>
+                            <span className="font-medium text-muted-foreground">Batch Size: </span>
+                            <span className="text-foreground">{job.config?.batch_size || job.batch_size || "N/A"}</span>
+                          </div>
+                          <div>
+                            <span className="font-medium text-muted-foreground">Image Size: </span>
+                            <span className="text-foreground">{job.config?.img_size || job.img_size || "N/A"}</span>
+                          </div>
+                          <div>
+                            <span className="font-medium text-muted-foreground">Model: </span>
+                            <span className="text-foreground">{job.config?.model_name || job.model_name || "N/A"}</span>
+                          </div>
+                        </div>
+                        
+                        {job.metrics && Object.keys(job.metrics).length > 0 && (
+                          <div className="mt-3 pt-3 border-t border-border">
+                            <p className="text-xs font-medium text-muted-foreground mb-2">Metrics:</p>
+                            <div className="grid grid-cols-2 gap-2 text-xs">
+                              {job.metrics.map50 !== undefined && (
+                                <div>
+                                  <span className="text-muted-foreground">mAP50: </span>
+                                  <span className="text-primary font-medium">{(job.metrics.map50 * 100).toFixed(2)}%</span>
+                                </div>
+                              )}
+                              {job.metrics['map50-95'] !== undefined && (
+                                <div>
+                                  <span className="text-muted-foreground">mAP50-95: </span>
+                                  <span className="text-primary font-medium">{(job.metrics['map50-95'] * 100).toFixed(2)}%</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                        
+                        {job.error && (
+                          <div className="mt-3 pt-3 border-t border-border">
+                            <p className="text-xs text-destructive">
+                              <span className="font-medium">Error: </span>
+                              {job.error}
+                            </p>
+                          </div>
+                        )}
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
                 <FiCpu className="text-6xl mb-4 opacity-20" />
                 <p className="text-sm">No training jobs yet</p>
                 <p className="text-xs mt-1">Start a new training job to see it here</p>
+                <Button
+                  onClick={fetchTrainingJobs}
+                  variant="outline"
+                  size="sm"
+                  className="mt-4 border-border"
+                >
+                  <FiRefreshCw className="mr-2" />
+                  Refresh
+                </Button>
               </div>
             )}
           </CardContent>

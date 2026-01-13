@@ -8,14 +8,16 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { FiFolder, FiPlus, FiUpload, FiDownload, FiTrash2, FiEdit, FiCheckCircle, FiRefreshCw, FiPlay, FiEye } from "react-icons/fi";
+import { FiFolder, FiPlus, FiUpload, FiDownload, FiTrash2, FiEdit, FiCheckCircle, FiRefreshCw, FiPlay, FiEye, FiBarChart2 } from "react-icons/fi";
 import DatasetWorkflow from "@/components/DatasetWorkflow";
+import DatasetAnalysisTab from "@/components/DatasetAnalysisTab";
 
 export default function DatasetsTab() {
   const [datasets, setDatasets] = useState([]);
   const [isCreating, setIsCreating] = useState(false);
   const [selectedDataset, setSelectedDataset] = useState(null);
   const [showWorkflow, setShowWorkflow] = useState(false);
+  const [showAnalysis, setShowAnalysis] = useState(false);
   const [newDataset, setNewDataset] = useState({
     name: "",
     description: "",
@@ -151,23 +153,12 @@ export default function DatasetsTab() {
   };
 
   const handleTrainDataset = async (datasetId, datasetName) => {
-    if (!confirm(`Start training with dataset "${datasetName}"? Make sure it's exported first.`)) {
+    if (!confirm(`Start training with dataset "${datasetName}"?\n\nThe dataset will be automatically exported if needed.`)) {
       return;
     }
 
     try {
-      // First ensure dataset is exported
-      const exportResponse = await fetch(`http://localhost:8000/api/annotations/datasets/${datasetId}/export`, {
-        method: "POST"
-      });
-      const exportData = await exportResponse.json();
-      
-      if (!exportData.success) {
-        alert("Failed to export dataset. Make sure you have annotated images.");
-        return;
-      }
-
-      // Start training with the exported dataset
+      // Start training - endpoint will auto-export if needed
       const trainingConfig = {
         epochs: 50,
         batch_size: 16,
@@ -187,11 +178,13 @@ export default function DatasetsTab() {
       const trainData = await trainResponse.json();
       
       if (trainData.success) {
-        alert(`Training started! Job ID: ${trainData.job_id}\nGo to Training tab to monitor progress.`);
+        alert(`✅ Training started successfully!\n\nJob ID: ${trainData.job_id}\n\nGo to Training tab to monitor progress.`);
+      } else {
+        alert(`Error: ${trainData.detail || "Failed to start training"}`);
       }
     } catch (error) {
       console.error("Error starting training:", error);
-      alert("Error starting training. Make sure backend is running.");
+      alert("Error starting training. Make sure backend is running and dataset has annotated images.");
     }
   };
 
@@ -377,6 +370,18 @@ export default function DatasetsTab() {
                     </Button>
                   </div>
                   <Button
+                    onClick={() => {
+                      setSelectedDataset(dataset);
+                      setShowAnalysis(true);
+                    }}
+                    variant="outline"
+                    className="w-full border-blue-500 text-blue-500 hover:bg-blue-500 hover:text-white"
+                    size="sm"
+                  >
+                    <FiBarChart2 className="mr-1" />
+                    Analyze Dataset
+                  </Button>
+                  <Button
                     onClick={() => handleExportDataset(dataset.id)}
                     variant="outline"
                     className="w-full border-green-500 text-green-500 hover:bg-green-500 hover:text-white"
@@ -510,6 +515,23 @@ export default function DatasetsTab() {
                 }
               }}
             />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Analysis Dialog */}
+      <Dialog open={showAnalysis} onOpenChange={setShowAnalysis}>
+        <DialogContent className="bg-card border-border max-w-6xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-primary">
+              Dataset Analysis - {selectedDataset?.name}
+            </DialogTitle>
+            <DialogDescription>
+              Comprehensive analysis for training readiness
+            </DialogDescription>
+          </DialogHeader>
+          {selectedDataset && (
+            <DatasetAnalysisTab datasetId={selectedDataset.id} />
           )}
         </DialogContent>
       </Dialog>
