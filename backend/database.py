@@ -106,6 +106,46 @@ def create_tables():
         """)
         print("✓ Table 'datasets' ready")
         
+        # Dataset images table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS dataset_images (
+                id VARCHAR(255) PRIMARY KEY,
+                dataset_id VARCHAR(255) NOT NULL,
+                filename VARCHAR(255) NOT NULL,
+                original_name VARCHAR(255),
+                path VARCHAR(500) NOT NULL,
+                annotated BOOLEAN DEFAULT FALSE,
+                split ENUM('train', 'val', 'test') NULL,
+                uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (dataset_id) REFERENCES datasets(id) ON DELETE CASCADE,
+                INDEX idx_dataset_id (dataset_id),
+                INDEX idx_annotated (annotated),
+                INDEX idx_split (split)
+            )
+        """)
+        print("✓ Table 'dataset_images' ready")
+        
+        # Annotations table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS annotations (
+                id VARCHAR(255) PRIMARY KEY,
+                dataset_id VARCHAR(255) NOT NULL,
+                image_id VARCHAR(255) NOT NULL,
+                image_name VARCHAR(255) NOT NULL,
+                width INT NOT NULL,
+                height INT NOT NULL,
+                boxes JSON NOT NULL,
+                split ENUM('train', 'val', 'test') NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                FOREIGN KEY (dataset_id) REFERENCES datasets(id) ON DELETE CASCADE,
+                FOREIGN KEY (image_id) REFERENCES dataset_images(id) ON DELETE CASCADE,
+                INDEX idx_dataset_id (dataset_id),
+                INDEX idx_image_id (image_id)
+            )
+        """)
+        print("✓ Table 'annotations' ready")
+        
         # Training jobs table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS training_jobs (

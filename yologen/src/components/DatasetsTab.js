@@ -494,8 +494,18 @@ export default function DatasetsTab() {
           {selectedDataset && (
             <DatasetWorkflow 
               dataset={selectedDataset} 
-              onRefresh={() => {
-                fetchDatasets();
+              onRefresh={async () => {
+                await fetchDatasets();
+                // Refresh the selected dataset with latest data
+                if (selectedDataset) {
+                  try {
+                    const response = await fetch(`http://localhost:8000/api/annotations/datasets/${selectedDataset.id}`);
+                    const updatedDataset = await response.json();
+                    setSelectedDataset(updatedDataset);
+                  } catch (error) {
+                    console.error("Error refreshing selected dataset:", error);
+                  }
+                }
               }}
             />
           )}

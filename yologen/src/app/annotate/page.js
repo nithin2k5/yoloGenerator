@@ -23,6 +23,8 @@ function AnnotationToolContent() {
   const [isDrawing, setIsDrawing] = useState(false);
   const [startPos, setStartPos] = useState(null);
   const [currentBox, setCurrentBox] = useState(null);
+  const [selectedSplit, setSelectedSplit] = useState(null);
+  const [showSplitDialog, setShowSplitDialog] = useState(false);
   
   const canvasRef = useRef(null);
   const imageRef = useRef(null);
@@ -40,6 +42,21 @@ function AnnotationToolContent() {
       loadImage(currentImageIndex);
     }
   }, [currentImageIndex, images]);
+
+  // Handle window resize to redraw canvas
+  useEffect(() => {
+    const handleResize = () => {
+      // Use a small debounce to avoid excessive redraws
+      setTimeout(() => {
+        if (canvasRef.current && imageRef.current?.complete) {
+          drawCanvas();
+        }
+      }, 100);
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [boxes, currentBox, isDrawing]);
 
   const fetchDataset = async () => {
     try {
@@ -66,6 +83,10 @@ function AnnotationToolContent() {
     } catch (error) {
       setBoxes([]);
     }
+    
+    // Load split assignment
+    setSelectedSplit(img.split || null);
+    setShowSplitDialog(false);
   };
 
   const handleUploadImages = async (e) => {
@@ -145,14 +166,50 @@ function AnnotationToolContent() {
     const canvas = canvasRef.current;
     if (!canvas || !e) return { x: 0, y: 0 };
     
+    const img = imageRef.current;
+    if (!img || !img.complete || img.naturalWidth === 0 || !canvas.width || !canvas.height) {
+      return { x: 0, y: 0 };
+    }
+    
+    // Get canvas bounding rectangle
     const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
     
-    const x = (e.clientX - rect.left) * scaleX;
-    const y = (e.clientY - rect.top) * scaleY;
+    // Get computed styles to account for borders
+    const styles = window.getComputedStyle(canvas);
+    const borderLeft = parseFloat(styles.borderLeftWidth) || 0;
+    const borderRight = parseFloat(styles.borderRightWidth) || 0;
+    const borderTop = parseFloat(styles.borderTopWidth) || 0;
+    const borderBottom = parseFloat(styles.borderBottomWidth) || 0;
     
-    return { x, y };
+    // Image natural dimensions (these are what we store annotations in)
+    const imageWidth = img.naturalWidth;
+    const imageHeight = img.naturalHeight;
+    
+    // Canvas internal dimensions (should match image dimensions)
+    const canvasWidth = canvas.width;
+    const canvasHeight = canvas.height;
+    
+    // Get displayed canvas dimensions (actual rendered size on screen, excluding borders)
+    const displayWidth = rect.width - borderLeft - borderRight;
+    const displayHeight = rect.height - borderTop - borderBottom;
+    
+    // Calculate the actual scale factor
+    // Canvas is scaled proportionally, so scale should be the same for both axes
+    const scale = imageWidth / displayWidth;
+    
+    // Get mouse position relative to canvas element (including borders in the offset)
+    const mouseX = e.clientX - rect.left - borderLeft;
+    const mouseY = e.clientY - rect.top - borderTop;
+    
+    // Convert display coordinates to image coordinates
+    const imageX = mouseX * scale;
+    const imageY = mouseY * scale;
+    
+    // Clamp to image bounds
+    const clampedX = Math.max(0, Math.min(imageX, imageWidth));
+    const clampedY = Math.max(0, Math.min(imageY, imageHeight));
+    
+    return { x: clampedX, y: clampedY };
   };
 
   const handleMouseDown = (e) => {
@@ -295,6 +352,11 @@ function AnnotationToolContent() {
       return;
     }
     
+    // Ensure we use the image's natural dimensions (canvas should match, but use image as source of truth)
+    const imgElement = imageRef.current;
+    const imageWidth = imgElement?.naturalWidth || canvas.width;
+    const imageHeight = imgElement?.naturalHeight || canvas.height;
+    
     try {
       const response = await fetch("http://localhost:8000/api/annotations/annotations/save", {
         method: "POST",
@@ -302,10 +364,11 @@ function AnnotationToolContent() {
         body: JSON.stringify({
           image_id: img.id,
           image_name: img.filename,
-          width: canvas.width,
-          height: canvas.height,
+          width: imageWidth,
+          height: imageHeight,
           boxes: boxes,
-          dataset_id: datasetId
+          dataset_id: datasetId,
+          split: selectedSplit  // Include split if already selected
         })
       });
       
@@ -317,17 +380,60 @@ function AnnotationToolContent() {
       const data = await response.json();
       
       if (data.success) {
-        alert("Annotations saved successfully!");
-        // Move to next image
-        if (currentImageIndex < images.length - 1) {
-          setCurrentImageIndex(currentImageIndex + 1);
+        // If split not selected, show dialog; otherwise move to next
+        if (!selectedSplit) {
+          setShowSplitDialog(true);
         } else {
-          alert("All images annotated! You can now export the dataset.");
+          handleNextImage();
         }
       }
     } catch (error) {
       console.error("Error saving annotations:", error);
       alert(`Error saving annotations: ${error.message}`);
+    }
+  };
+
+  const handleSplitSelection = async (split) => {
+    if (!images[currentImageIndex]) return;
+    
+    const img = images[currentImageIndex];
+    setSelectedSplit(split);
+    
+    try {
+      // Update split on backend
+      const response = await fetch(
+        `http://localhost:8000/api/annotations/datasets/${datasetId}/images/${img.id}/split`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ split })
+        }
+      );
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || "Failed to update split");
+      }
+      
+      // Update local state
+      const updatedImages = [...images];
+      updatedImages[currentImageIndex].split = split;
+      setImages(updatedImages);
+      
+      // Close dialog and move to next image
+      setShowSplitDialog(false);
+      handleNextImage();
+    } catch (error) {
+      console.error("Error updating split:", error);
+      alert(`Error updating split: ${error.message}`);
+    }
+  };
+
+  const handleNextImage = () => {
+    if (currentImageIndex < images.length - 1) {
+      setCurrentImageIndex(currentImageIndex + 1);
+    } else {
+      alert("All images annotated! You can now export the dataset.");
     }
   };
 
@@ -377,6 +483,11 @@ function AnnotationToolContent() {
                 <h1 className="text-xl font-bold text-primary">{dataset.name}</h1>
                 <p className="text-xs text-muted-foreground">
                   Image {currentImageIndex + 1} of {images.length}
+                  {selectedSplit && (
+                    <span className="ml-2">
+                      • Split: <span className="font-semibold capitalize">{selectedSplit}</span>
+                    </span>
+                  )}
                 </p>
               </div>
             </div>
@@ -403,11 +514,25 @@ function AnnotationToolContent() {
                       className="hidden"
                       onLoad={(e) => {
                         const canvas = canvasRef.current;
-                        if (canvas && e.target.complete && e.target.naturalWidth > 0) {
-                          canvas.width = e.target.naturalWidth;
-                          canvas.height = e.target.naturalHeight;
-                          // Small delay to ensure image is fully loaded
-                          setTimeout(() => drawCanvas(), 50);
+                        const img = e.target;
+                        if (canvas && img.complete && img.naturalWidth > 0) {
+                          // Set canvas internal dimensions to EXACTLY match image natural size
+                          // This is critical - these dimensions are used for coordinate calculations
+                          canvas.width = img.naturalWidth;
+                          canvas.height = img.naturalHeight;
+                          
+                          // Set display size to maintain aspect ratio
+                          // The canvas will be scaled by CSS but internal dimensions stay at natural size
+                          canvas.style.width = '100%';
+                          canvas.style.height = 'auto';
+                          canvas.style.maxHeight = '70vh';
+                          canvas.style.display = 'block';
+                          
+                          // Force a reflow to ensure dimensions are set
+                          canvas.offsetHeight;
+                          
+                          // Small delay to ensure everything is rendered
+                          setTimeout(() => drawCanvas(), 100);
                         }
                       }}
                       onError={(e) => {
@@ -443,7 +568,12 @@ function AnnotationToolContent() {
                         }
                       }}
                       className="w-full border border-border rounded-lg cursor-crosshair bg-black"
-                      style={{ maxHeight: '70vh', objectFit: 'contain' }}
+                      style={{ 
+                        maxHeight: '70vh', 
+                        height: 'auto',
+                        display: 'block',
+                        boxSizing: 'border-box'
+                      }}
                     />
                   </div>
                 ) : (
@@ -564,6 +694,28 @@ function AnnotationToolContent() {
               </CardContent>
             </Card>
 
+            {/* Current Split Display */}
+            {selectedSplit && (
+              <Card className="bg-card border-border">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Current Split</p>
+                      <p className="text-lg font-semibold capitalize">{selectedSplit}</p>
+                    </div>
+                    <Button
+                      onClick={() => setShowSplitDialog(true)}
+                      variant="outline"
+                      size="sm"
+                      className="border-border"
+                    >
+                      Change
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Actions */}
             <div className="space-y-3">
               <Button onClick={handleSaveAnnotations} className="w-full bg-primary hover:bg-primary/90">
@@ -590,6 +742,61 @@ function AnnotationToolContent() {
           </div>
         </div>
       </main>
+
+      {/* Split Selection Dialog */}
+      {showSplitDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <Card className="bg-card border-border w-full max-w-md mx-4">
+            <CardHeader>
+              <CardTitle className="text-primary">Select Dataset Split</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Please select whether this image is for training, validation, or testing.
+              </p>
+              <div className="grid grid-cols-3 gap-3">
+                <Button
+                  onClick={() => handleSplitSelection("train")}
+                  className="h-20 flex flex-col items-center justify-center bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  <span className="text-lg font-bold">Train</span>
+                  <span className="text-xs opacity-90">Training set</span>
+                </Button>
+                <Button
+                  onClick={() => handleSplitSelection("val")}
+                  className="h-20 flex flex-col items-center justify-center bg-yellow-600 hover:bg-yellow-700 text-white"
+                >
+                  <span className="text-lg font-bold">Val</span>
+                  <span className="text-xs opacity-90">Validation set</span>
+                </Button>
+                <Button
+                  onClick={() => handleSplitSelection("test")}
+                  className="h-20 flex flex-col items-center justify-center bg-green-600 hover:bg-green-700 text-white"
+                >
+                  <span className="text-lg font-bold">Test</span>
+                  <span className="text-xs opacity-90">Test set</span>
+                </Button>
+              </div>
+              <div className="flex items-center justify-between pt-2">
+                <p className="text-xs text-muted-foreground">
+                  This selection will be saved and used when exporting the dataset.
+                </p>
+                <Button
+                  onClick={() => {
+                    setShowSplitDialog(false);
+                    handleNextImage();
+                  }}
+                  variant="ghost"
+                  size="sm"
+                  className="text-muted-foreground"
+                >
+                  Skip for now
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }

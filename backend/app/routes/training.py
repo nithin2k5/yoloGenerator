@@ -1,25 +1,48 @@
 from fastapi import APIRouter, File, UploadFile, HTTPException, BackgroundTasks, Form
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, validator
 from typing import Optional, Dict, Any
 import os
 import yaml
 from pathlib import Path
 import tempfile
 import uuid
+import logging
+
+# Import trainer
+from models.trainer import YOLOTrainer
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 # Store training jobs
 training_jobs: Dict[str, Dict[str, Any]] = {}
 
 class TrainingConfig(BaseModel):
-    epochs: int = 100
-    batch_size: int = 16
-    img_size: int = 640
-    model_name: str = "yolov8n.pt"
-    learning_rate: Optional[float] = None
-    patience: Optional[int] = 50
+    epochs: int = Field(default=100, ge=1, le=1000, description="Number of training epochs (1-1000)")
+    batch_size: int = Field(default=16, ge=1, le=128, description="Batch size (1-128)")
+    img_size: int = Field(default=640, ge=320, le=1280, description="Image size (320-1280)")
+    model_name: str = Field(default="yolov8n.pt", description="Base model name")
+    learning_rate: Optional[float] = Field(default=None, ge=0.0001, le=1.0, description="Learning rate")
+    patience: Optional[int] = Field(default=50, ge=1, le=200, description="Early stopping patience")
+    device: Optional[str] = Field(default=None, description="Device (cpu, cuda, mps, or None for auto)")
+    strict_epochs: bool = Field(default=False, description="If True, enforce exact epoch count (disable early stopping)")
+    
+    @validator('epochs')
+    def validate_epochs(cls, v):
+        if v < 1:
+            raise ValueError("Epochs must be at least 1")
+        if v > 1000:
+            raise ValueError("Epochs cannot exceed 1000")
+        return v
+    
+    @validator('batch_size')
+    def validate_batch_size(cls, v):
+        if v < 1:
+            raise ValueError("Batch size must be at least 1")
+        if v > 128:
+            raise ValueError("Batch size cannot exceed 128")
+        return v
 
 class DatasetTrainingRequest(BaseModel):
     dataset_id: str
@@ -73,40 +96,68 @@ async def start_training(
 
 async def run_training(job_id: str, data_yaml: str, config: TrainingConfig):
     """
-    Background task to run training
+    Background task to run training with strict validation
     """
     try:
         training_jobs[job_id]["status"] = "running"
+        training_jobs[job_id]["progress"] = 0
+        training_jobs[job_id]["current_epoch"] = 0
         
+        logger.info(f"Starting training job {job_id} with {config.epochs} epochs")
+        
+        # Validate dataset YAML exists
+        if not Path(data_yaml).exists():
+            raise FileNotFoundError(f"Dataset YAML not found: {data_yaml}")
+        
+        # Initialize trainer
         trainer = YOLOTrainer(config.model_name)
         
-        # Training parameters
+        # Training parameters with strict configuration
         train_params = {
-            "data_yaml": data_yaml,
+            "data": data_yaml,
             "epochs": config.epochs,
             "imgsz": config.img_size,
             "batch": config.batch_size,
-            "name": job_id,
+            "name": f"job_{job_id}",
+            "project": "runs/detect",
+            "exist_ok": True,
+            "strict_epochs": config.strict_epochs,  # Pass strict mode to trainer
         }
         
+        # Add optional parameters
         if config.learning_rate:
             train_params["lr0"] = config.learning_rate
-        if config.patience:
+        if config.patience and not config.strict_epochs:
+            # Only use patience if not in strict mode
             train_params["patience"] = config.patience
+        elif config.strict_epochs:
+            # In strict mode, disable early stopping
+            train_params["patience"] = config.epochs + 1
+        if config.device:
+            train_params["device"] = config.device
         
         # Run training
+        logger.info(f"Training parameters: {train_params}")
         results = trainer.train(**train_params)
         
+        # Update job status
         training_jobs[job_id].update({
             "status": "completed",
             "progress": 100,
-            "results": results
+            "current_epoch": config.epochs,
+            "results": results,
+            "model_path": results.get("model_path", ""),
+            "metrics": results.get("metrics", {})
         })
         
+        logger.info(f"Training job {job_id} completed successfully")
+        
     except Exception as e:
+        logger.error(f"Training job {job_id} failed: {str(e)}", exc_info=True)
         training_jobs[job_id].update({
             "status": "failed",
-            "error": str(e)
+            "error": str(e),
+            "progress": training_jobs[job_id].get("progress", 0)
         })
 
 @router.get("/status/{job_id}")

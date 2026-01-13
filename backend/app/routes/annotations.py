@@ -11,10 +11,15 @@ import uuid
 from datetime import datetime
 import aiofiles
 import zipfile
+import sys
+
+# Add parent directory to path for imports
+sys.path.append(str(Path(__file__).parent.parent.parent))
+from database_service import DatasetService, AnnotationService
 
 router = APIRouter()
 
-# Store annotations in memory (in production, use a database)
+# Keep in-memory storage as fallback/backup
 annotations_db: Dict[str, Dict] = {}
 datasets_db: Dict[str, Dict] = {}
 
@@ -44,6 +49,19 @@ async def create_dataset(dataset: Dataset):
     Create a new dataset
     """
     dataset_id = str(uuid.uuid4())
+    
+    # Save to database
+    success = DatasetService.create_dataset(
+        dataset_id=dataset_id,
+        name=dataset.name,
+        classes=dataset.classes,
+        description=dataset.description or ""
+    )
+    
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to create dataset in database")
+    
+    # Also keep in memory for compatibility
     datasets_db[dataset_id] = {
         "id": dataset_id,
         "name": dataset.name,
@@ -60,10 +78,13 @@ async def create_dataset(dataset: Dataset):
     (dataset_dir / "images").mkdir(exist_ok=True)
     (dataset_dir / "labels").mkdir(exist_ok=True)
     
+    # Get from database to return complete data
+    db_dataset = DatasetService.get_dataset(dataset_id)
+    
     return JSONResponse(content={
         "success": True,
         "dataset_id": dataset_id,
-        "dataset": datasets_db[dataset_id]
+        "dataset": db_dataset or datasets_db[dataset_id]
     })
 
 @router.get("/datasets/list")
@@ -71,8 +92,15 @@ async def list_datasets():
     """
     List all datasets
     """
+    # Get from database
+    db_datasets = DatasetService.list_datasets()
+    
+    # Also sync with memory for compatibility
+    for db_dataset in db_datasets:
+        datasets_db[db_dataset['id']] = db_dataset
+    
     return {
-        "datasets": list(datasets_db.values())
+        "datasets": db_datasets
     }
 
 @router.get("/datasets/{dataset_id}")
@@ -80,10 +108,19 @@ async def get_dataset(dataset_id: str):
     """
     Get dataset details
     """
-    if dataset_id not in datasets_db:
-        raise HTTPException(status_code=404, detail="Dataset not found")
+    # Get from database
+    db_dataset = DatasetService.get_dataset(dataset_id)
     
-    return datasets_db[dataset_id]
+    if not db_dataset:
+        # Fallback to memory
+        if dataset_id not in datasets_db:
+            raise HTTPException(status_code=404, detail="Dataset not found")
+        return datasets_db[dataset_id]
+    
+    # Sync with memory
+    datasets_db[dataset_id] = db_dataset
+    
+    return db_dataset
 
 @router.post("/datasets/{dataset_id}/upload")
 async def upload_images_to_dataset(
@@ -165,15 +202,34 @@ async def upload_images_to_dataset(
                 errors.append(f"{file.filename}: Failed to write file")
                 continue
             
-            # Add to dataset
+            # Add to database
+            DatasetService.add_image(
+                dataset_id=dataset_id,
+                image_id=image_id,
+                filename=new_filename,
+                original_name=file.filename,
+                path=str(file_path)
+            )
+            
+            # Also keep in memory for compatibility
             image_info = {
                 "id": image_id,
                 "filename": new_filename,
                 "original_name": file.filename,
                 "path": str(file_path),
                 "annotated": False,
+                "split": None,  # train, val, test, or None
                 "uploaded_at": datetime.now().isoformat()
             }
+            
+            if dataset_id not in datasets_db:
+                datasets_db[dataset_id] = DatasetService.get_dataset(dataset_id) or {
+                    "id": dataset_id,
+                    "images": []
+                }
+            
+            if "images" not in datasets_db[dataset_id]:
+                datasets_db[dataset_id]["images"] = []
             
             datasets_db[dataset_id]["images"].append(image_info)
             uploaded_files.append(image_info)
@@ -215,9 +271,29 @@ async def save_annotation(request: dict):
     width = request.get("width")
     height = request.get("height")
     boxes = request.get("boxes", [])
+    split = request.get("split")  # train, val, test, or None
     
-    # Store annotation
+    # Validate split if provided
+    if split and split not in ["train", "val", "test"]:
+        raise HTTPException(status_code=400, detail="Split must be 'train', 'val', or 'test'")
+    
+    # Save to database
     annotation_id = f"{dataset_id}_{image_id}"
+    success = AnnotationService.save_annotation(
+        annotation_id=annotation_id,
+        dataset_id=dataset_id,
+        image_id=image_id,
+        image_name=image_name,
+        width=width,
+        height=height,
+        boxes=boxes,
+        split=split
+    )
+    
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to save annotation to database")
+    
+    # Also keep in memory for compatibility
     annotations_db[annotation_id] = {
         "dataset_id": dataset_id,
         "image_id": image_id,
@@ -225,6 +301,7 @@ async def save_annotation(request: dict):
         "width": width,
         "height": height,
         "boxes": boxes,
+        "split": split,
         "updated_at": datetime.now().isoformat()
     }
     
@@ -244,16 +321,20 @@ async def save_annotation(request: dict):
             
             f.write(f"{box['class_id']} {center_x} {center_y} {norm_width} {norm_height}\n")
     
-    # Mark image as annotated
-    for img in datasets_db[dataset_id]["images"]:
-        if img["id"] == image_id:
-            img["annotated"] = True
-            break
+    # Update memory cache
+    if dataset_id in datasets_db:
+        for img in datasets_db[dataset_id].get("images", []):
+            if img["id"] == image_id:
+                img["annotated"] = True
+                if split:
+                    img["split"] = split
+                break
     
     return JSONResponse(content={
         "success": True,
         "annotation_id": annotation_id,
-        "label_file": str(label_file)
+        "label_file": str(label_file),
+        "split": split
     })
 
 @router.get("/annotations/{dataset_id}/{image_id}")
@@ -261,8 +342,16 @@ async def get_annotation(dataset_id: str, image_id: str):
     """
     Get annotations for an image
     """
-    annotation_id = f"{dataset_id}_{image_id}"
+    # Get from database
+    db_annotation = AnnotationService.get_annotation(dataset_id, image_id)
     
+    if db_annotation:
+        # Sync with memory
+        annotations_db[db_annotation['id']] = db_annotation
+        return db_annotation
+    
+    # Fallback to memory
+    annotation_id = f"{dataset_id}_{image_id}"
     if annotation_id not in annotations_db:
         return {"boxes": []}
     
@@ -271,47 +360,80 @@ async def get_annotation(dataset_id: str, image_id: str):
 @router.post("/datasets/{dataset_id}/export")
 async def export_dataset(dataset_id: str, split_ratio: float = 0.8):
     """
-    Export dataset in YOLO format with train/val split
+    Export dataset in YOLO format with train/val/test split
+    Uses manually assigned splits if available, otherwise uses split_ratio
     """
     if dataset_id not in datasets_db:
         raise HTTPException(status_code=404, detail="Dataset not found")
     
-    dataset = datasets_db[dataset_id]
+    # Get dataset from database
+    db_dataset = DatasetService.get_dataset(dataset_id)
+    if not db_dataset:
+        if dataset_id not in datasets_db:
+            raise HTTPException(status_code=404, detail="Dataset not found")
+        dataset = datasets_db[dataset_id]
+    else:
+        dataset = db_dataset
+        # Sync with memory
+        datasets_db[dataset_id] = dataset
+    
     dataset_dir = Path(f"datasets/{dataset_id}")
     
-    # Get all annotated images
-    annotated_images = [img for img in dataset["images"] if img["annotated"]]
+    # Get all annotated images from database
+    all_images = DatasetService.get_dataset_images(dataset_id)
+    annotated_images = [img for img in all_images if img.get("annotated", False)]
     
     if not annotated_images:
         raise HTTPException(status_code=400, detail="No annotated images in dataset")
     
-    # Split into train/val
-    import random
-    random.shuffle(annotated_images)
-    split_idx = int(len(annotated_images) * split_ratio)
-    train_images = annotated_images[:split_idx]
-    val_images = annotated_images[split_idx:]
+    # Check if images have manually assigned splits
+    images_with_split = [img for img in annotated_images if img.get("split")]
     
-    # Create train/val directories
+    if images_with_split:
+        # Use manually assigned splits
+        train_images = [img for img in annotated_images if img.get("split") == "train"]
+        val_images = [img for img in annotated_images if img.get("split") == "val"]
+        test_images = [img for img in annotated_images if img.get("split") == "test"]
+        # Images without split go to train by default
+        train_images.extend([img for img in annotated_images if not img.get("split")])
+    else:
+        # Use automatic split based on ratio
+        import random
+        random.shuffle(annotated_images)
+        split_idx = int(len(annotated_images) * split_ratio)
+        train_images = annotated_images[:split_idx]
+        val_images = annotated_images[split_idx:]
+        test_images = []
+    
+    # Create train/val/test directories
     train_dir = dataset_dir / "split" / "train"
     val_dir = dataset_dir / "split" / "val"
+    test_dir = dataset_dir / "split" / "test"
     
-    for split_dir, images in [(train_dir, train_images), (val_dir, val_images)]:
-        (split_dir / "images").mkdir(parents=True, exist_ok=True)
-        (split_dir / "labels").mkdir(parents=True, exist_ok=True)
-        
-        for img in images:
-            # Copy image
-            src_img = dataset_dir / "images" / img["filename"]
-            dst_img = split_dir / "images" / img["filename"]
-            shutil.copy2(src_img, dst_img)
+    splits = [
+        (train_dir, train_images, "train"),
+        (val_dir, val_images, "val"),
+        (test_dir, test_images, "test")
+    ]
+    
+    for split_dir, images, split_name in splits:
+        if images:  # Only create directory if there are images
+            (split_dir / "images").mkdir(parents=True, exist_ok=True)
+            (split_dir / "labels").mkdir(parents=True, exist_ok=True)
             
-            # Copy label
-            label_name = f"{Path(img['filename']).stem}.txt"
-            src_label = dataset_dir / "labels" / label_name
-            dst_label = split_dir / "labels" / label_name
-            if src_label.exists():
-                shutil.copy2(src_label, dst_label)
+            for img in images:
+                # Copy image
+                src_img = dataset_dir / "images" / img["filename"]
+                dst_img = split_dir / "images" / img["filename"]
+                if src_img.exists():
+                    shutil.copy2(src_img, dst_img)
+                
+                # Copy label
+                label_name = f"{Path(img['filename']).stem}.txt"
+                src_label = dataset_dir / "labels" / label_name
+                dst_label = split_dir / "labels" / label_name
+                if src_label.exists():
+                    shutil.copy2(src_label, dst_label)
     
     # Create data.yaml
     yaml_content = f"""# YOLO Dataset Configuration
@@ -320,10 +442,13 @@ async def export_dataset(dataset_id: str, split_ratio: float = 0.8):
 path: {dataset_dir / 'split'}
 train: train/images
 val: val/images
-
-# Classes
-names:
 """
+    
+    # Add test if there are test images
+    if test_images:
+        yaml_content += "test: test/images\n"
+    
+    yaml_content += "\n# Classes\nnames:\n"
     for idx, class_name in enumerate(dataset["classes"]):
         yaml_content += f"  {idx}: {class_name}\n"
     
@@ -340,23 +465,26 @@ names:
         zipf.write(yaml_path, "data.yaml")
         
         # Add all files
-        for split in ["train", "val"]:
-            split_path = dataset_dir / "split" / split
-            for folder in ["images", "labels"]:
-                folder_path = split_path / folder
-                if folder_path.exists():
-                    for file in folder_path.iterdir():
-                        if file.is_file():
-                            arcname = f"{split}/{folder}/{file.name}"
-                            zipf.write(file, arcname)
+        for split_name in ["train", "val", "test"]:
+            split_path = dataset_dir / "split" / split_name
+            if split_path.exists():
+                for folder in ["images", "labels"]:
+                    folder_path = split_path / folder
+                    if folder_path.exists():
+                        for file in folder_path.iterdir():
+                            if file.is_file():
+                                arcname = f"{split_name}/{folder}/{file.name}"
+                                zipf.write(file, arcname)
     
     return {
         "success": True,
         "yaml_path": str(yaml_path),
         "train_images": len(train_images),
         "val_images": len(val_images),
+        "test_images": len(test_images),
         "total_classes": len(dataset["classes"]),
-        "zip_path": str(zip_path)
+        "zip_path": str(zip_path),
+        "used_manual_splits": len(images_with_split) > 0
     }
 
 @router.get("/datasets/{dataset_id}/download")
@@ -407,32 +535,73 @@ async def get_dataset_stats(dataset_id: str):
     """
     Get dataset statistics
     """
-    if dataset_id not in datasets_db:
-        raise HTTPException(status_code=404, detail="Dataset not found")
+    # Get from database
+    stats = AnnotationService.get_dataset_stats(dataset_id)
     
-    dataset = datasets_db[dataset_id]
-    total_images = len(dataset["images"])
-    annotated_images = len([img for img in dataset["images"] if img["annotated"]])
+    if not stats:
+        # Fallback to memory
+        if dataset_id not in datasets_db:
+            raise HTTPException(status_code=404, detail="Dataset not found")
+        
+        dataset = datasets_db[dataset_id]
+        total_images = len(dataset.get("images", []))
+        annotated_images = len([img for img in dataset.get("images", []) if img.get("annotated", False)])
+        
+        # Count annotations per class
+        class_counts = {cls: 0 for cls in dataset.get("classes", [])}
+        for key, annotation in annotations_db.items():
+            if key.startswith(f"{dataset_id}_"):
+                for box in annotation.get("boxes", []):
+                    class_name = box.get("class_name", "")
+                    if class_name in class_counts:
+                        class_counts[class_name] += 1
+        
+        return {
+            "dataset_id": dataset_id,
+            "name": dataset.get("name", ""),
+            "total_images": total_images,
+            "annotated_images": annotated_images,
+            "unannotated_images": total_images - annotated_images,
+            "total_classes": len(dataset.get("classes", [])),
+            "class_counts": class_counts,
+            "completion_percentage": (annotated_images / total_images * 100) if total_images > 0 else 0
+        }
     
-    # Count annotations per class
-    class_counts = {cls: 0 for cls in dataset["classes"]}
-    for key, annotation in annotations_db.items():
-        if key.startswith(f"{dataset_id}_"):
-            for box in annotation["boxes"]:
-                class_name = box["class_name"]
-                if class_name in class_counts:
-                    class_counts[class_name] += 1
+    return stats
+
+@router.put("/datasets/{dataset_id}/images/{image_id}/split")
+async def update_image_split(dataset_id: str, image_id: str, request: dict):
+    """
+    Update the split assignment for an image
+    """
+    # Check if dataset exists
+    db_dataset = DatasetService.get_dataset(dataset_id)
+    if not db_dataset:
+        if dataset_id not in datasets_db:
+            raise HTTPException(status_code=404, detail="Dataset not found")
     
-    return {
-        "dataset_id": dataset_id,
-        "name": dataset["name"],
-        "total_images": total_images,
-        "annotated_images": annotated_images,
-        "unannotated_images": total_images - annotated_images,
-        "total_classes": len(dataset["classes"]),
-        "class_counts": class_counts,
-        "completion_percentage": (annotated_images / total_images * 100) if total_images > 0 else 0
-    }
+    split = request.get("split")
+    if split and split not in ["train", "val", "test"]:
+        raise HTTPException(status_code=400, detail="Split must be 'train', 'val', or 'test'")
+    
+    # Update in database
+    success = DatasetService.update_image_split(dataset_id, image_id, split)
+    
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to update split in database")
+    
+    # Update memory cache
+    if dataset_id in datasets_db:
+        for img in datasets_db[dataset_id].get("images", []):
+            if img["id"] == image_id:
+                img["split"] = split
+                break
+    
+    return JSONResponse(content={
+        "success": True,
+        "image_id": image_id,
+        "split": split
+    })
 
 @router.get("/image/{dataset_id}/{image_filename}")
 async def serve_image(dataset_id: str, image_filename: str):

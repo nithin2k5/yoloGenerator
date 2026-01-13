@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -8,6 +9,7 @@ import { Progress } from "@/components/ui/progress";
 import { FiCheckCircle, FiCircle, FiArrowRight, FiUpload, FiEdit, FiDownload, FiPlay } from "react-icons/fi";
 
 export default function DatasetWorkflow({ dataset, onRefresh }) {
+  const router = useRouter();
   const [currentStep, setCurrentStep] = useState(0);
   const [stats, setStats] = useState(null);
 
@@ -16,7 +18,7 @@ export default function DatasetWorkflow({ dataset, onRefresh }) {
       fetchDatasetStats();
       determineCurrentStep();
     }
-  }, [dataset]);
+  }, [dataset, stats]);
 
   // Refresh stats periodically when dataset is active
   useEffect(() => {
@@ -119,13 +121,14 @@ export default function DatasetWorkflow({ dataset, onRefresh }) {
     }
     
     if (step.number === 3) {
-      // Can only start step 3 if step 2 is complete
+      // Can only start step 3 if step 2 is complete (has images)
       if (dataset?.images?.length === 0) return "pending";
       
       if (stats?.annotated_images === stats?.total_images && stats?.total_images > 0) {
         return "complete";
       }
-      if (stats?.annotated_images > 0 || dataset?.images?.length > 0) {
+      // If images exist, step 3 should be current (even if stats haven't refreshed yet)
+      if (dataset?.images?.length > 0) {
         return "current";
       }
       return "pending";
@@ -309,7 +312,7 @@ export default function DatasetWorkflow({ dataset, onRefresh }) {
 
                     {/* Action Button */}
                     <div>
-                      {status === "current" && step.number === 2 && (
+                      {(status === "current" || status === "complete") && step.number === 2 && (
                         <Button 
                           size="sm" 
                           onClick={() => {
@@ -374,7 +377,11 @@ export default function DatasetWorkflow({ dataset, onRefresh }) {
                                     }
                                   }
                                   
-                                  message += `\n\nNext: Click "Start Annotating" to label objects in your images.`;
+                                  if (dataset.images.length === 0) {
+                                    message += `\n\nNext: Click "Start Annotating" to label objects in your images.`;
+                                  } else {
+                                    message += `\n\nYou can now proceed to annotation or upload more images.`;
+                                  }
                                   
                                   alert(message);
                                   
@@ -406,27 +413,31 @@ export default function DatasetWorkflow({ dataset, onRefresh }) {
                             };
                             input.click();
                           }}
-                          className="bg-primary hover:bg-primary/90"
+                          className={status === "complete" ? "bg-secondary hover:bg-secondary/90" : "bg-primary hover:bg-primary/90"}
                         >
                           <FiUpload className="mr-1" />
-                          Upload Images
+                          {status === "complete" ? "Upload More Images" : "Upload Images"}
                         </Button>
                       )}
                       
-                      {status === "current" && step.number === 3 && (
+                      {(status === "current" || status === "complete") && step.number === 3 && dataset?.images?.length > 0 && (
                         <Button 
                           size="sm"
                           onClick={() => {
+                            if (!dataset || !dataset.id) {
+                              alert("Error: Dataset ID not found");
+                              return;
+                            }
                             if (dataset.images.length === 0) {
                               alert("Please upload images first!");
                               return;
                             }
-                            window.location.href = `/annotate?dataset=${dataset.id}`;
+                            router.push(`/annotate?dataset=${dataset.id}`);
                           }}
                           className="bg-primary hover:bg-primary/90"
                         >
                           <FiEdit className="mr-1" />
-                          Start Annotating
+                          {status === "complete" ? "Continue Annotating" : "Start Annotating"}
                         </Button>
                       )}
                       
@@ -467,7 +478,7 @@ export default function DatasetWorkflow({ dataset, onRefresh }) {
                         </Badge>
                       )}
                       
-                      {status === "complete" && (
+                      {status === "complete" && step.number !== 2 && (
                         <Badge className="bg-green-500/20 text-green-500 border-green-500/30 text-xs">
                           ✓ Complete
                         </Badge>
