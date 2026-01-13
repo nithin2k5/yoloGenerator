@@ -8,6 +8,7 @@ from pathlib import Path
 import tempfile
 import uuid
 import logging
+import sys
 
 # Import trainer
 from models.trainer import YOLOTrainer
@@ -131,8 +132,9 @@ async def run_training(job_id: str, data_yaml: str, config: TrainingConfig):
             # Only use patience if not in strict mode
             train_params["patience"] = config.patience
         elif config.strict_epochs:
-            # In strict mode, disable early stopping
+            # In strict mode, disable early stopping - ensure all epochs run
             train_params["patience"] = config.epochs + 1
+            train_params["save_period"] = 10  # Save checkpoints every 10 epochs
         if config.device:
             train_params["device"] = config.device
         
@@ -238,5 +240,143 @@ async def start_training_from_dataset(
         })
         
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/export-and-train")
+async def export_and_train(
+    background_tasks: BackgroundTasks,
+    request: DatasetTrainingRequest
+):
+    """
+    Export dataset and start training in one operation (strict training mode)
+    """
+    try:
+        # First, export the dataset
+        dataset_path = Path(f"datasets/{request.dataset_id}")
+        yaml_path = dataset_path / "data.yaml"
+        
+        # Check if already exported, if not export it
+        if not yaml_path.exists():
+            # Import database service for export logic
+            import sys
+            from pathlib import Path as PathLib
+            backend_path = PathLib(__file__).parent.parent.parent
+            if str(backend_path) not in sys.path:
+                sys.path.insert(0, str(backend_path))
+            
+            from database_service import DatasetService
+            import shutil
+            import random
+            
+            # Get dataset
+            dataset = DatasetService.get_dataset(request.dataset_id)
+            if not dataset:
+                raise HTTPException(status_code=404, detail="Dataset not found")
+            
+            # Get annotated images
+            all_images = DatasetService.get_dataset_images(request.dataset_id)
+            annotated_images = [img for img in all_images if img.get("annotated", False)]
+            
+            if not annotated_images:
+                raise HTTPException(status_code=400, detail="No annotated images in dataset")
+            
+            # Check for manual splits
+            images_with_split = [img for img in annotated_images if img.get("split")]
+            
+            if images_with_split:
+                train_images = [img for img in annotated_images if img.get("split") == "train"]
+                val_images = [img for img in annotated_images if img.get("split") == "val"]
+                test_images = [img for img in annotated_images if img.get("split") == "test"]
+                train_images.extend([img for img in annotated_images if not img.get("split")])
+            else:
+                random.shuffle(annotated_images)
+                split_idx = int(len(annotated_images) * 0.8)
+                train_images = annotated_images[:split_idx]
+                val_images = annotated_images[split_idx:]
+                test_images = []
+            
+            # Create split directories
+            train_dir = dataset_path / "split" / "train"
+            val_dir = dataset_path / "split" / "val"
+            test_dir = dataset_path / "split" / "test"
+            
+            for split_dir, images, _ in [(train_dir, train_images, "train"), (val_dir, val_images, "val"), (test_dir, test_images, "test")]:
+                if images:
+                    (split_dir / "images").mkdir(parents=True, exist_ok=True)
+                    (split_dir / "labels").mkdir(parents=True, exist_ok=True)
+                    
+                    for img in images:
+                        src_img = dataset_path / "images" / img["filename"]
+                        dst_img = split_dir / "images" / img["filename"]
+                        if src_img.exists():
+                            shutil.copy2(src_img, dst_img)
+                        
+                        label_name = f"{Path(img['filename']).stem}.txt"
+                        src_label = dataset_path / "labels" / label_name
+                        dst_label = split_dir / "labels" / label_name
+                        if src_label.exists():
+                            shutil.copy2(src_label, dst_label)
+            
+            # Create data.yaml
+            yaml_content = f"""# YOLO Dataset Configuration
+# Generated from dataset: {dataset['name']}
+
+path: {dataset_path / 'split'}
+train: train/images
+val: val/images
+"""
+            if test_images:
+                yaml_content += "test: test/images\n"
+            
+            yaml_content += "\n# Classes\nnames:\n"
+            for idx, class_name in enumerate(dataset["classes"]):
+                yaml_content += f"  {idx}: {class_name}\n"
+            yaml_content += f"\nnc: {len(dataset['classes'])}\n"
+            
+            with open(yaml_path, 'w') as f:
+                f.write(yaml_content)
+            
+            logger.info(f"Dataset {request.dataset_id} exported successfully for training")
+        
+        # Verify yaml exists now
+        if not yaml_path.exists():
+            raise HTTPException(
+                status_code=404,
+                detail="Dataset export failed. YAML file not found."
+            )
+        
+        # Force strict training mode
+        request.config.strict_epochs = True
+        
+        # Generate job ID
+        job_id = str(uuid.uuid4())
+        
+        # Initialize training job
+        training_jobs[job_id] = {
+            "status": "pending",
+            "config": request.config.dict(),
+            "progress": 0,
+            "dataset_id": request.dataset_id,
+            "strict_mode": True
+        }
+        
+        # Add training to background tasks
+        background_tasks.add_task(
+            run_training,
+            job_id,
+            str(yaml_path),
+            request.config
+        )
+        
+        return JSONResponse(content={
+            "success": True,
+            "job_id": job_id,
+            "message": "Dataset exported and strict training started",
+            "strict_epochs": True,
+            "epochs": request.config.epochs
+        })
+        
+    except Exception as e:
+        logger.error(f"Export and train error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 

@@ -6,12 +6,24 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { FiCheckCircle, FiCircle, FiArrowRight, FiUpload, FiEdit, FiDownload, FiPlay } from "react-icons/fi";
+import { FiCheckCircle, FiCircle, FiArrowRight, FiUpload, FiEdit, FiDownload, FiPlay, FiSettings } from "react-icons/fi";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export default function DatasetWorkflow({ dataset, onRefresh }) {
   const router = useRouter();
   const [currentStep, setCurrentStep] = useState(0);
   const [stats, setStats] = useState(null);
+  const [showTrainDialog, setShowTrainDialog] = useState(false);
+  const [trainingConfig, setTrainingConfig] = useState({
+    epochs: 100,
+    batch_size: 16,
+    img_size: 640,
+    model_name: "yolov8n.pt",
+    learning_rate: 0.01
+  });
 
   useEffect(() => {
     if (dataset) {
@@ -442,34 +454,207 @@ export default function DatasetWorkflow({ dataset, onRefresh }) {
                       )}
                       
                       {status === "current" && step.number === 4 && (
-                        <Button 
-                          size="sm"
-                          onClick={async () => {
-                            if (stats?.annotated_images !== stats?.total_images) {
-                              alert(`Please annotate all images first!\n\nCurrent: ${stats?.annotated_images || 0} / ${stats?.total_images || 0} annotated`);
-                              return;
-                            }
-                            
-                            try {
-                              const response = await fetch(`http://localhost:8000/api/annotations/datasets/${dataset.id}/export`, {
-                                method: "POST"
-                              });
-                              const data = await response.json();
-                              if (data.success) {
-                                alert(`✅ Dataset exported successfully!\n\nTraining set: ${data.train_images} images\nValidation set: ${data.val_images} images\n\nYou can now proceed to training.`);
-                                onRefresh();
-                              } else {
-                                alert(`Error: ${data.detail || "Failed to export dataset"}`);
+                        <div className="flex gap-2">
+                          <Button 
+                            size="sm"
+                            onClick={async () => {
+                              if (stats?.annotated_images !== stats?.total_images) {
+                                alert(`Please annotate all images first!\n\nCurrent: ${stats?.annotated_images || 0} / ${stats?.total_images || 0} annotated`);
+                                return;
                               }
-                            } catch (error) {
-                              alert("Error exporting dataset. Make sure backend is running.");
-                            }
-                          }}
-                          className="bg-primary hover:bg-primary/90"
-                        >
-                          <FiDownload className="mr-1" />
-                          Export Dataset
-                        </Button>
+                              
+                              try {
+                                const response = await fetch(`http://localhost:8000/api/annotations/datasets/${dataset.id}/export`, {
+                                  method: "POST"
+                                });
+                                const data = await response.json();
+                                if (data.success) {
+                                  alert(`✅ Dataset exported successfully!\n\nTraining set: ${data.train_images} images\nValidation set: ${data.val_images} images\n\nYou can now proceed to training.`);
+                                  onRefresh();
+                                } else {
+                                  alert(`Error: ${data.detail || "Failed to export dataset"}`);
+                                }
+                              } catch (error) {
+                                alert("Error exporting dataset. Make sure backend is running.");
+                              }
+                            }}
+                            variant="outline"
+                            className="border-border"
+                          >
+                            <FiDownload className="mr-1" />
+                            Export Only
+                          </Button>
+                          <Dialog open={showTrainDialog} onOpenChange={setShowTrainDialog}>
+                            <DialogTrigger asChild>
+                              <Button 
+                                size="sm"
+                                className="bg-green-600 hover:bg-green-700 text-white"
+                              >
+                                <FiPlay className="mr-1" />
+                                Export & Train
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent className="bg-card border-border max-w-md">
+                              <DialogHeader>
+                                <DialogTitle className="text-primary">Export & Train Configuration</DialogTitle>
+                                <DialogDescription>
+                                  Configure strict training parameters. All epochs will be completed.
+                                </DialogDescription>
+                              </DialogHeader>
+                              <div className="space-y-4 py-4">
+                                <div className="space-y-2">
+                                  <Label htmlFor="epochs">Epochs (Required)</Label>
+                                  <Input
+                                    id="epochs"
+                                    type="number"
+                                    min="1"
+                                    max="1000"
+                                    value={trainingConfig.epochs}
+                                    onChange={(e) => setTrainingConfig({...trainingConfig, epochs: parseInt(e.target.value) || 100})}
+                                    className="bg-background border-border"
+                                  />
+                                  <p className="text-xs text-muted-foreground">
+                                    Number of training epochs (strict mode - all will run)
+                                  </p>
+                                </div>
+                                
+                                <div className="space-y-2">
+                                  <Label htmlFor="batch_size">Batch Size</Label>
+                                  <Input
+                                    id="batch_size"
+                                    type="number"
+                                    min="1"
+                                    max="128"
+                                    value={trainingConfig.batch_size}
+                                    onChange={(e) => setTrainingConfig({...trainingConfig, batch_size: parseInt(e.target.value) || 16})}
+                                    className="bg-background border-border"
+                                  />
+                                </div>
+                                
+                                <div className="space-y-2">
+                                  <Label htmlFor="img_size">Image Size</Label>
+                                  <Select 
+                                    value={trainingConfig.img_size.toString()} 
+                                    onValueChange={(v) => setTrainingConfig({...trainingConfig, img_size: parseInt(v)})}
+                                  >
+                                    <SelectTrigger className="bg-background border-border">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="320">320</SelectItem>
+                                      <SelectItem value="416">416</SelectItem>
+                                      <SelectItem value="512">512</SelectItem>
+                                      <SelectItem value="640">640</SelectItem>
+                                      <SelectItem value="768">768</SelectItem>
+                                      <SelectItem value="896">896</SelectItem>
+                                      <SelectItem value="1024">1024</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                                
+                                <div className="space-y-2">
+                                  <Label htmlFor="model_name">Model</Label>
+                                  <Select 
+                                    value={trainingConfig.model_name} 
+                                    onValueChange={(v) => setTrainingConfig({...trainingConfig, model_name: v})}
+                                  >
+                                    <SelectTrigger className="bg-background border-border">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="yolov8n.pt">YOLOv8 Nano (yolov8n.pt)</SelectItem>
+                                      <SelectItem value="yolov8s.pt">YOLOv8 Small (yolov8s.pt)</SelectItem>
+                                      <SelectItem value="yolov8m.pt">YOLOv8 Medium (yolov8m.pt)</SelectItem>
+                                      <SelectItem value="yolov8l.pt">YOLOv8 Large (yolov8l.pt)</SelectItem>
+                                      <SelectItem value="yolov8x.pt">YOLOv8 XLarge (yolov8x.pt)</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                                
+                                <div className="space-y-2">
+                                  <Label htmlFor="learning_rate">Learning Rate</Label>
+                                  <Input
+                                    id="learning_rate"
+                                    type="number"
+                                    step="0.001"
+                                    min="0.0001"
+                                    max="1.0"
+                                    value={trainingConfig.learning_rate}
+                                    onChange={(e) => setTrainingConfig({...trainingConfig, learning_rate: parseFloat(e.target.value) || 0.01})}
+                                    className="bg-background border-border"
+                                  />
+                                </div>
+                                
+                                <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
+                                  <p className="text-xs text-yellow-500 font-semibold mb-1">⚠️ Strict Training Mode</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    All {trainingConfig.epochs} epochs will be completed. Early stopping is disabled.
+                                  </p>
+                                </div>
+                                
+                                <div className="flex gap-2 pt-2">
+                                  <Button
+                                    onClick={() => setShowTrainDialog(false)}
+                                    variant="outline"
+                                    className="flex-1 border-border"
+                                  >
+                                    Cancel
+                                  </Button>
+                                  <Button
+                                    onClick={async () => {
+                                      if (!trainingConfig.epochs || trainingConfig.epochs < 1) {
+                                        alert("Please enter a valid number of epochs (1-1000)");
+                                        return;
+                                      }
+                                      
+                                      if (stats?.annotated_images !== stats?.total_images) {
+                                        alert(`Please annotate all images first!\n\nCurrent: ${stats?.annotated_images || 0} / ${stats?.total_images || 0} annotated`);
+                                        return;
+                                      }
+                                      
+                                      try {
+                                        const response = await fetch("http://localhost:8000/api/training/export-and-train", {
+                                          method: "POST",
+                                          headers: { "Content-Type": "application/json" },
+                                          body: JSON.stringify({
+                                            dataset_id: dataset.id,
+                                            config: {
+                                              epochs: trainingConfig.epochs,
+                                              batch_size: trainingConfig.batch_size,
+                                              img_size: trainingConfig.img_size,
+                                              model_name: trainingConfig.model_name,
+                                              learning_rate: trainingConfig.learning_rate,
+                                              strict_epochs: true
+                                            }
+                                          })
+                                        });
+                                        
+                                        const data = await response.json();
+                                        
+                                        if (data.success) {
+                                          setShowTrainDialog(false);
+                                          alert(`✅ Export & Training started!\n\nJob ID: ${data.job_id}\nEpochs: ${data.epochs} (strict mode)\n\nGo to the "Training" tab to monitor progress.`);
+                                          onRefresh();
+                                          // Optionally redirect to training tab
+                                          window.location.hash = "#training";
+                                        } else {
+                                          alert(`Error: ${data.detail || "Failed to start training"}`);
+                                        }
+                                      } catch (error) {
+                                        console.error("Error:", error);
+                                        alert("Error starting export and training. Make sure backend is running.");
+                                      }
+                                    }}
+                                    className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                                  >
+                                    <FiPlay className="mr-2" />
+                                    Start Training
+                                  </Button>
+                                </div>
+                              </div>
+                            </DialogContent>
+                          </Dialog>
+                        </div>
                       )}
                       
                       {status === "pending" && (

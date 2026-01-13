@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { FiSave, FiTrash2, FiUpload, FiChevronLeft, FiChevronRight, FiHome } from "react-icons/fi";
+import { FiSave, FiTrash2, FiUpload, FiChevronLeft, FiChevronRight, FiHome, FiDownload } from "react-icons/fi";
 
 function AnnotationToolContent() {
   const searchParams = useSearchParams();
@@ -34,33 +34,74 @@ function AnnotationToolContent() {
   useEffect(() => {
     if (datasetId) {
       fetchDataset();
+      fetchStats();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [datasetId]);
+
+  const fetchStats = async () => {
+    if (!datasetId) return;
+    try {
+      const response = await fetch(`http://localhost:8000/api/annotations/datasets/${datasetId}/stats`);
+      if (response.ok) {
+        const data = await response.json();
+        setStats(data);
+      }
+    } catch (error) {
+      console.error("Error fetching stats:", error);
+    }
+  };
+
+  // Refresh stats periodically and when images change
+  useEffect(() => {
+    if (!datasetId) return;
+    
+    // Initial fetch
+    fetchStats();
+    
+    // Refresh every 5 seconds
+    const interval = setInterval(() => {
+      fetchStats();
+    }, 5000);
+    
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [datasetId]);
 
   useEffect(() => {
-    if (images.length > 0) {
+    if (images.length > 0 && currentImageIndex < images.length) {
       loadImage(currentImageIndex);
     }
-  }, [currentImageIndex, images]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentImageIndex, images.length]);
 
   // Handle window resize to redraw canvas
   useEffect(() => {
     const handleResize = () => {
       // Use a small debounce to avoid excessive redraws
-      setTimeout(() => {
+      const timeoutId = setTimeout(() => {
         if (canvasRef.current && imageRef.current?.complete) {
           drawCanvas();
         }
       }, 100);
+      return () => clearTimeout(timeoutId);
     };
 
     window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [boxes, currentBox, isDrawing]);
 
   const fetchDataset = async () => {
+    if (!datasetId) return;
+    
     try {
       const response = await fetch(`http://localhost:8000/api/annotations/datasets/${datasetId}`);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch dataset: ${response.status}`);
+      }
       const data = await response.json();
       setDataset(data);
       setImages(data.images || []);
@@ -71,16 +112,21 @@ function AnnotationToolContent() {
   };
 
   const loadImage = async (index) => {
-    if (!images[index]) return;
+    if (!images[index] || !datasetId) return;
     
     const img = images[index];
     
     // Load existing annotations
     try {
       const response = await fetch(`http://localhost:8000/api/annotations/annotations/${datasetId}/${img.id}`);
-      const data = await response.json();
-      setBoxes(data.boxes || []);
+      if (response.ok) {
+        const data = await response.json();
+        setBoxes(data.boxes || []);
+      } else {
+        setBoxes([]);
+      }
     } catch (error) {
+      console.error("Error loading annotations:", error);
       setBoxes([]);
     }
     
@@ -323,7 +369,10 @@ function AnnotationToolContent() {
   };
 
   useEffect(() => {
-    drawCanvas();
+    if (canvasRef.current && imageRef.current?.complete) {
+      drawCanvas();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [boxes, currentBox, isDrawing]);
 
   // Redraw when image loads
@@ -331,6 +380,7 @@ function AnnotationToolContent() {
     if (imageRef.current && imageRef.current.complete && canvasRef.current) {
       drawCanvas();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentImageIndex]);
 
   const handleSaveAnnotations = async () => {
@@ -721,6 +771,47 @@ function AnnotationToolContent() {
               <Button onClick={handleSaveAnnotations} className="w-full bg-primary hover:bg-primary/90">
                 <FiSave className="mr-2" />
                 Save & Next
+              </Button>
+              
+              {/* Export Button - Always visible */}
+              <Button
+                onClick={async () => {
+                  if (!datasetId) {
+                    alert("Error: Dataset ID not found");
+                    return;
+                  }
+                  
+                  // Refresh stats first
+                  await fetchStats();
+                  
+                  if (stats && stats.annotated_images !== stats.total_images) {
+                    if (!confirm(`Not all images are annotated!\n\nAnnotated: ${stats.annotated_images || 0} / ${stats.total_images || 0}\n\nExport anyway? (Only annotated images will be exported)`)) {
+                      return;
+                    }
+                  }
+                  
+                  try {
+                    const response = await fetch(`http://localhost:8000/api/annotations/datasets/${datasetId}/export`, {
+                      method: "POST"
+                    });
+                    const data = await response.json();
+                    if (data.success) {
+                      alert(`✅ Dataset exported successfully!\n\nTraining set: ${data.train_images} images\nValidation set: ${data.val_images} images${data.test_images ? `\nTest set: ${data.test_images} images` : ''}\n\nYou can now proceed to training.`);
+                      await fetchStats(); // Refresh stats after export
+                    } else {
+                      alert(`Error: ${data.detail || "Failed to export dataset"}`);
+                    }
+                  } catch (error) {
+                    console.error("Error exporting dataset:", error);
+                    alert("Error exporting dataset. Make sure backend is running.");
+                  }
+                }}
+                variant="outline"
+                className="w-full border-green-500 text-green-500 hover:bg-green-500 hover:text-white"
+                disabled={!datasetId}
+              >
+                <FiDownload className="mr-2" />
+                Export Dataset
               </Button>
               <Button 
                 onClick={() => fileInputMoreRef.current?.click()}

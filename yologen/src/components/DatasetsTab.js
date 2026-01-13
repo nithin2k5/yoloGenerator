@@ -353,44 +353,46 @@ export default function DatasetsTab() {
                 </div>
 
                 {/* Actions */}
-                <div className="grid grid-cols-2 gap-2 pt-2">
+                <div className="space-y-2 pt-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      onClick={() => {
+                        setSelectedDataset(dataset);
+                        setShowWorkflow(true);
+                      }}
+                      className="bg-primary hover:bg-primary/90"
+                      size="sm"
+                    >
+                      <FiEye className="mr-1" />
+                      Pipeline
+                    </Button>
+                    <Button
+                      onClick={() => window.location.href = `/annotate?dataset=${dataset.id}`}
+                      variant="outline"
+                      className="border-border"
+                      size="sm"
+                    >
+                      <FiEdit className="mr-1" />
+                      Annotate
+                    </Button>
+                  </div>
                   <Button
-                    onClick={() => {
-                      setSelectedDataset(dataset);
-                      setShowWorkflow(true);
-                    }}
-                    className="bg-primary hover:bg-primary/90"
-                    size="sm"
-                  >
-                    <FiEye className="mr-1" />
-                    View Pipeline
-                  </Button>
-                  <Button
-                    onClick={() => window.location.href = `/annotate?dataset=${dataset.id}`}
+                    onClick={() => handleExportDataset(dataset.id)}
                     variant="outline"
-                    className="border-border"
+                    className="w-full border-green-500 text-green-500 hover:bg-green-500 hover:text-white"
                     size="sm"
                   >
-                    <FiEdit className="mr-1" />
-                    Annotate
+                    <FiDownload className="mr-1" />
+                    Export Dataset
                   </Button>
                   <Button
                     onClick={() => handleTrainDataset(dataset.id, dataset.name)}
                     variant="outline"
-                    className="border-primary text-primary hover:bg-primary hover:text-primary-foreground"
+                    className="w-full border-primary text-primary hover:bg-primary hover:text-primary-foreground"
                     size="sm"
                   >
                     <FiPlay className="mr-1" />
-                    Train
-                  </Button>
-                  <Button
-                    onClick={() => handleExportDataset(dataset.id)}
-                    variant="outline"
-                    className="border-border"
-                    size="sm"
-                  >
-                    <FiUpload className="mr-1" />
-                    Export
+                    Train Model
                   </Button>
                 </div>
                 <div className="grid grid-cols-2 gap-2 pt-2">
