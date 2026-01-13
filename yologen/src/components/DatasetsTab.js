@@ -73,9 +73,18 @@ export default function DatasetsTab() {
       const data = await response.json();
       
       if (data.success) {
-        alert("Dataset created successfully!");
+        alert("✅ Dataset created successfully!\n\nNext steps:\n1. Upload images\n2. Annotate objects\n3. Export dataset\n4. Train model\n\nClick 'View Pipeline' to see the complete workflow.");
         setNewDataset({ name: "", description: "", classes: "" });
-        fetchDatasets();
+        await fetchDatasets();
+        
+        // Automatically show workflow for the newly created dataset
+        const newDataset = data.dataset || datasets.find(d => d.id === data.dataset_id);
+        if (newDataset) {
+          setSelectedDataset(newDataset);
+          setShowWorkflow(true);
+        }
+      } else {
+        alert(`Error: ${data.detail || "Failed to create dataset"}`);
       }
     } catch (error) {
       console.error("Error creating dataset:", error);
@@ -188,10 +197,28 @@ export default function DatasetsTab() {
 
   return (
     <div className="space-y-6">
+      {/* Workflow Notice */}
+      <Card className="bg-primary/10 border-primary/30">
+        <CardContent className="p-4">
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 rounded-full bg-primary/20 border border-primary/40 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <FiCheckCircle className="text-primary text-lg" />
+            </div>
+            <div className="flex-1">
+              <h3 className="font-semibold text-primary mb-1">Complete Workflow Required (A to Z)</h3>
+              <p className="text-sm text-muted-foreground">
+                To create a working dataset, you must complete all steps in order: <strong>Create → Upload → Annotate → Export → Train</strong>. 
+                Click "View Pipeline" on any dataset to see your progress and next steps.
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-3xl font-bold text-primary">Datasets</h2>
-          <p className="text-muted-foreground">Create and manage annotation datasets</p>
+          <p className="text-muted-foreground">Create and manage annotation datasets - follow the complete workflow</p>
         </div>
         <div className="flex gap-3">
           <Button onClick={fetchDatasets} variant="outline" className="border-border">

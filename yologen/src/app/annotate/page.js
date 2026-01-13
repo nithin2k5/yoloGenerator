@@ -26,6 +26,8 @@ function AnnotationToolContent() {
   
   const canvasRef = useRef(null);
   const imageRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const fileInputMoreRef = useRef(null);
 
   useEffect(() => {
     if (datasetId) {
@@ -70,29 +72,78 @@ function AnnotationToolContent() {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
 
+    // Reset input value to allow re-uploading the same file
+    e.target.value = '';
+
+    if (!datasetId) {
+      alert("Error: Dataset ID not found");
+      return;
+    }
+
+    // Validate files before upload
+    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/bmp', 'image/webp'];
+    const invalidFiles = files.filter(file => {
+      const type = file.type.toLowerCase();
+      return !validTypes.some(validType => type.includes(validType.split('/')[1]));
+    });
+    
+    if (invalidFiles.length > 0) {
+      alert(`Invalid file types detected. Please upload only images (JPG, PNG, GIF, BMP, WEBP).\n\nInvalid files: ${invalidFiles.map(f => f.name).join(', ')}`);
+      return;
+    }
+
     const formData = new FormData();
-    files.forEach(file => formData.append("files", file));
+    files.forEach(file => {
+      // Ensure each file is appended with the correct field name
+      formData.append("files", file);
+    });
 
     try {
       const response = await fetch(`http://localhost:8000/api/annotations/datasets/${datasetId}/upload`, {
         method: "POST",
-        body: formData
+        body: formData,
+        // Don't set Content-Type header, let browser set it with boundary
       });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch {
+          errorData = { detail: errorText || `Server error: ${response.status}` };
+        }
+        throw new Error(errorData.detail || `Upload failed: ${response.status}`);
+      }
+
       const data = await response.json();
       
       if (data.success) {
-        alert(`${data.uploaded} images uploaded successfully!`);
+        let message = `✅ ${data.uploaded} image${data.uploaded !== 1 ? 's' : ''} uploaded successfully!`;
+        if (data.errors && data.errors.length > 0) {
+          message += `\n\n⚠️ ${data.error_count} file${data.error_count !== 1 ? 's' : ''} failed:\n${data.errors.slice(0, 3).join('\n')}`;
+          if (data.errors.length > 3) {
+            message += `\n... and ${data.errors.length - 3} more`;
+          }
+        }
+        alert(message);
         fetchDataset();
+      } else {
+        let errorMsg = data.detail || "Upload failed";
+        if (data.errors && data.errors.length > 0) {
+          errorMsg += `\n\nErrors:\n${data.errors.join('\n')}`;
+        }
+        throw new Error(errorMsg);
       }
     } catch (error) {
       console.error("Error uploading images:", error);
-      alert("Error uploading images");
+      alert(`❌ Error uploading images: ${error.message}\n\nMake sure:\n- Backend is running on port 8000\n- Files are valid images\n- You have permission to upload`);
     }
   };
 
   const getCanvasCoordinates = (e) => {
     const canvas = canvasRef.current;
-    if (!canvas) return { x: 0, y: 0 };
+    if (!canvas || !e) return { x: 0, y: 0 };
     
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width;
@@ -105,7 +156,8 @@ function AnnotationToolContent() {
   };
 
   const handleMouseDown = (e) => {
-    if (!canvasRef.current) return;
+    e.preventDefault();
+    if (!canvasRef.current || !dataset) return;
     
     const { x, y } = getCanvasCoordinates(e);
     
@@ -115,6 +167,7 @@ function AnnotationToolContent() {
   };
 
   const handleMouseMove = (e) => {
+    e.preventDefault();
     if (!isDrawing || !startPos || !canvasRef.current) return;
     
     const { x, y } = getCanvasCoordinates(e);
@@ -126,27 +179,48 @@ function AnnotationToolContent() {
     drawCanvas();
   };
 
-  const handleMouseUp = () => {
-    if (!isDrawing || !currentBox || !dataset) return;
+  const handleMouseUp = (e) => {
+    e.preventDefault();
+    if (!isDrawing || !startPos || !dataset || !canvasRef.current) {
+      setIsDrawing(false);
+      setStartPos(null);
+      setCurrentBox(null);
+      return;
+    }
+    
+    // Calculate final box dimensions from current mouse position
+    const { x, y } = getCanvasCoordinates(e);
+    const width = x - startPos.x;
+    const height = y - startPos.y;
     
     // Add box if it has reasonable size
-    if (Math.abs(currentBox.width) > 10 && Math.abs(currentBox.height) > 10) {
+    if (Math.abs(width) > 10 && Math.abs(height) > 10) {
       // Normalize negative dimensions
       const normalizedBox = {
-        x: currentBox.width < 0 ? currentBox.x + currentBox.width : currentBox.x,
-        y: currentBox.height < 0 ? currentBox.y + currentBox.height : currentBox.y,
-        width: Math.abs(currentBox.width),
-        height: Math.abs(currentBox.height),
+        x: width < 0 ? startPos.x + width : startPos.x,
+        y: height < 0 ? startPos.y + height : startPos.y,
+        width: Math.abs(width),
+        height: Math.abs(height),
         class_id: selectedClass,
         class_name: dataset.classes[selectedClass]
       };
       
-      setBoxes([...boxes, normalizedBox]);
+      // Use functional update to ensure we have the latest boxes
+      setBoxes(prevBoxes => [...prevBoxes, normalizedBox]);
+      
+      // Force canvas redraw after state update
+      setTimeout(() => {
+        setCurrentBox(null);
+        drawCanvas();
+      }, 0);
+    } else {
+      // Clear current box if too small
+      setCurrentBox(null);
+      drawCanvas();
     }
     
     setIsDrawing(false);
     setStartPos(null);
-    setCurrentBox(null);
   };
 
   const drawCanvas = () => {
@@ -193,7 +267,14 @@ function AnnotationToolContent() {
 
   useEffect(() => {
     drawCanvas();
-  }, [boxes, currentBox]);
+  }, [boxes, currentBox, isDrawing]);
+
+  // Redraw when image loads
+  useEffect(() => {
+    if (imageRef.current && imageRef.current.complete && canvasRef.current) {
+      drawCanvas();
+    }
+  }, [currentImageIndex]);
 
   const handleSaveAnnotations = async () => {
     if (!images[currentImageIndex] || !dataset) {
@@ -341,7 +422,26 @@ function AnnotationToolContent() {
                       onMouseDown={handleMouseDown}
                       onMouseMove={handleMouseMove}
                       onMouseUp={handleMouseUp}
-                      onMouseLeave={handleMouseUp}
+                      onMouseLeave={(e) => {
+                        if (isDrawing && startPos) {
+                          // Use the last known position from currentBox if available
+                          if (currentBox && Math.abs(currentBox.width) > 10 && Math.abs(currentBox.height) > 10) {
+                            const normalizedBox = {
+                              x: currentBox.width < 0 ? currentBox.x + currentBox.width : currentBox.x,
+                              y: currentBox.height < 0 ? currentBox.y + currentBox.height : currentBox.y,
+                              width: Math.abs(currentBox.width),
+                              height: Math.abs(currentBox.height),
+                              class_id: selectedClass,
+                              class_name: dataset.classes[selectedClass]
+                            };
+                            setBoxes(prevBoxes => [...prevBoxes, normalizedBox]);
+                          }
+                          setIsDrawing(false);
+                          setStartPos(null);
+                          setCurrentBox(null);
+                          setTimeout(() => drawCanvas(), 0);
+                        }
+                      }}
                       className="w-full border border-border rounded-lg cursor-crosshair bg-black"
                       style={{ maxHeight: '70vh', objectFit: 'contain' }}
                     />
@@ -349,16 +449,15 @@ function AnnotationToolContent() {
                 ) : (
                   <div className="flex flex-col items-center justify-center py-24 text-muted-foreground">
                     <p>No images in dataset</p>
-                    <Label htmlFor="upload-images" className="mt-4">
-                      <Button asChild className="bg-primary">
-                        <span>
-                          <FiUpload className="mr-2" />
-                          Upload Images
-                        </span>
-                      </Button>
-                    </Label>
+                    <Button 
+                      onClick={() => fileInputRef.current?.click()}
+                      className="mt-4 bg-primary"
+                    >
+                      <FiUpload className="mr-2" />
+                      Upload Images
+                    </Button>
                     <Input
-                      id="upload-images"
+                      ref={fileInputRef}
                       type="file"
                       multiple
                       accept="image/*"
@@ -471,16 +570,16 @@ function AnnotationToolContent() {
                 <FiSave className="mr-2" />
                 Save & Next
               </Button>
-              <Label htmlFor="upload-more" className="w-full">
-                <Button asChild variant="outline" className="w-full border-border">
-                  <span>
-                    <FiUpload className="mr-2" />
-                    Add More Images
-                  </span>
-                </Button>
-              </Label>
+              <Button 
+                onClick={() => fileInputMoreRef.current?.click()}
+                variant="outline" 
+                className="w-full border-border"
+              >
+                <FiUpload className="mr-2" />
+                Add More Images
+              </Button>
               <Input
-                id="upload-more"
+                ref={fileInputMoreRef}
                 type="file"
                 multiple
                 accept="image/*"

@@ -18,6 +18,17 @@ export default function DatasetWorkflow({ dataset, onRefresh }) {
     }
   }, [dataset]);
 
+  // Refresh stats periodically when dataset is active
+  useEffect(() => {
+    if (!dataset) return;
+    
+    const interval = setInterval(() => {
+      fetchDatasetStats();
+    }, 3000); // Refresh every 3 seconds
+    
+    return () => clearInterval(interval);
+  }, [dataset]);
+
   const fetchDatasetStats = async () => {
     try {
       const response = await fetch(`http://localhost:8000/api/annotations/datasets/${dataset.id}/stats`);
@@ -102,20 +113,26 @@ export default function DatasetWorkflow({ dataset, onRefresh }) {
     if (step.number === 1) return "complete";
     
     if (step.number === 2) {
-      return dataset?.images?.length > 0 ? "complete" : "current";
+      if (dataset?.images?.length > 0) return "complete";
+      // Can only start step 2 if step 1 is complete
+      return "current";
     }
     
     if (step.number === 3) {
+      // Can only start step 3 if step 2 is complete
+      if (dataset?.images?.length === 0) return "pending";
+      
       if (stats?.annotated_images === stats?.total_images && stats?.total_images > 0) {
         return "complete";
       }
-      if (stats?.annotated_images > 0) {
+      if (stats?.annotated_images > 0 || dataset?.images?.length > 0) {
         return "current";
       }
       return "pending";
     }
     
     if (step.number === 4) {
+      // Can only export if all images are annotated
       if (stats?.annotated_images === stats?.total_images && stats?.total_images > 0) {
         return "current";
       }
@@ -123,10 +140,21 @@ export default function DatasetWorkflow({ dataset, onRefresh }) {
     }
     
     if (step.number === 5) {
+      // Can only train if dataset is exported
+      // We'll check if export was successful (this would need backend tracking)
       return "pending";
     }
     
     return "pending";
+  };
+  
+  const canProceedToStep = (stepNumber) => {
+    if (stepNumber === 1) return true;
+    if (stepNumber === 2) return true; // Step 1 is always complete
+    if (stepNumber === 3) return dataset?.images?.length > 0;
+    if (stepNumber === 4) return stats?.annotated_images === stats?.total_images && stats?.total_images > 0;
+    if (stepNumber === 5) return false; // Would need export status check
+    return false;
   };
 
   const getStepColor = (status) => {
@@ -171,7 +199,9 @@ export default function DatasetWorkflow({ dataset, onRefresh }) {
             {getProgressPercentage()}% Complete
           </Badge>
         </CardTitle>
-        <CardDescription>Follow these steps to train your model</CardDescription>
+        <CardDescription>
+          Complete all steps in order (A to Z) to create and train your model
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <div className="space-y-6">
@@ -215,16 +245,65 @@ export default function DatasetWorkflow({ dataset, onRefresh }) {
                       <p className="text-xs text-muted-foreground mt-0.5">{step.description}</p>
                       
                       {/* Status Details */}
-                      {step.number === 2 && dataset?.images?.length > 0 && (
-                        <p className="text-xs text-primary mt-1">
-                          ✓ {dataset.images.length} images uploaded
+                      {step.number === 1 && (
+                        <p className="text-xs text-green-500 mt-1">
+                          ✓ Dataset "{dataset?.name}" created with {dataset?.classes?.length || 0} classes
                         </p>
                       )}
                       
-                      {step.number === 3 && stats?.total_images > 0 && (
-                        <p className="text-xs text-primary mt-1">
-                          {stats.annotated_images} / {stats.total_images} annotated ({stats.completion_percentage.toFixed(0)}%)
-                        </p>
+                      {step.number === 2 && (
+                        <div className="mt-1">
+                          {dataset?.images?.length > 0 ? (
+                            <p className="text-xs text-green-500">
+                              ✓ {dataset.images.length} images uploaded
+                            </p>
+                          ) : (
+                            <p className="text-xs text-muted-foreground">
+                              ⚠️ Upload at least 10-20 images for good results
+                            </p>
+                          )}
+                        </div>
+                      )}
+                      
+                      {step.number === 3 && (
+                        <div className="mt-1">
+                          {stats?.total_images > 0 ? (
+                            <p className="text-xs text-primary">
+                              {stats.annotated_images} / {stats.total_images} annotated ({stats.completion_percentage.toFixed(0)}%)
+                            </p>
+                          ) : (
+                            <p className="text-xs text-muted-foreground">
+                              ⚠️ Upload images first before annotating
+                            </p>
+                          )}
+                          {stats?.annotated_images === stats?.total_images && stats?.total_images > 0 && (
+                            <p className="text-xs text-green-500 mt-1">
+                              ✓ All images annotated! Ready to export.
+                            </p>
+                          )}
+                        </div>
+                      )}
+                      
+                      {step.number === 4 && (
+                        <div className="mt-1">
+                          {stats?.annotated_images === stats?.total_images && stats?.total_images > 0 ? (
+                            <p className="text-xs text-primary">
+                              Ready to export {stats.total_images} annotated images
+                            </p>
+                          ) : (
+                            <p className="text-xs text-muted-foreground">
+                              ⚠️ Complete annotation first ({stats?.annotated_images || 0} / {stats?.total_images || 0})
+                            </p>
+                          )}
+                        </div>
+                      )}
+                      
+                      {step.number === 5 && (
+                        <div className="mt-1">
+                          <p className="text-xs text-muted-foreground">
+                            Export dataset first, then start training
+                          </p>
+                        </div>
                       )}
                     </div>
 
@@ -237,43 +316,117 @@ export default function DatasetWorkflow({ dataset, onRefresh }) {
                             const input = document.createElement('input');
                             input.type = 'file';
                             input.multiple = true;
-                            input.accept = 'image/*';
+                            input.accept = 'image/*,.jpg,.jpeg,.png,.gif,.bmp,.webp';
                             input.onchange = async (e) => {
                               const files = Array.from(e.target.files);
+                              if (files.length === 0) return;
+                              
+                              // Validate file types
+                              const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/bmp', 'image/webp'];
+                              const invalidFiles = files.filter(file => !validTypes.includes(file.type));
+                              
+                              if (invalidFiles.length > 0) {
+                                alert(`Invalid file types detected. Please upload only images (JPG, PNG, GIF, BMP, WEBP).\n\nInvalid files: ${invalidFiles.map(f => f.name).join(', ')}`);
+                                return;
+                              }
+                              
+                              // Show loading state
+                              const button = e.target.closest('button');
+                              const originalText = button?.textContent;
+                              if (button) {
+                                button.disabled = true;
+                                button.textContent = 'Uploading...';
+                              }
+                              
                               const formData = new FormData();
-                              files.forEach(file => formData.append("files", file));
+                              files.forEach(file => {
+                                // Ensure each file is appended with the correct field name
+                                formData.append("files", file);
+                              });
                               
                               try {
                                 const response = await fetch(`http://localhost:8000/api/annotations/datasets/${dataset.id}/upload`, {
                                   method: "POST",
-                                  body: formData
+                                  body: formData,
+                                  // Don't set Content-Type header, let browser set it with boundary
                                 });
+                                
+                                if (!response.ok) {
+                                  const errorText = await response.text();
+                                  let errorData;
+                                  try {
+                                    errorData = JSON.parse(errorText);
+                                  } catch {
+                                    errorData = { detail: errorText || `Server error: ${response.status}` };
+                                  }
+                                  throw new Error(errorData.detail || `Upload failed: ${response.status}`);
+                                }
+                                
                                 const data = await response.json();
+                                
                                 if (data.success) {
-                                  alert(`${data.uploaded} images uploaded!`);
-                                  onRefresh();
+                                  let message = `✅ ${data.uploaded} image${data.uploaded !== 1 ? 's' : ''} uploaded successfully!`;
+                                  
+                                  if (data.errors && data.errors.length > 0) {
+                                    message += `\n\n⚠️ ${data.error_count} file${data.error_count !== 1 ? 's' : ''} failed:\n${data.errors.slice(0, 3).join('\n')}`;
+                                    if (data.errors.length > 3) {
+                                      message += `\n... and ${data.errors.length - 3} more`;
+                                    }
+                                  }
+                                  
+                                  message += `\n\nNext: Click "Start Annotating" to label objects in your images.`;
+                                  
+                                  alert(message);
+                                  
+                                  // Refresh dataset and stats
+                                  if (onRefresh) {
+                                    onRefresh();
+                                  }
+                                  
+                                  // Also manually refresh stats
+                                  setTimeout(() => {
+                                    fetchDatasetStats();
+                                  }, 500);
+                                } else {
+                                  let errorMsg = data.detail || "Failed to upload images";
+                                  if (data.errors && data.errors.length > 0) {
+                                    errorMsg += `\n\nErrors:\n${data.errors.join('\n')}`;
+                                  }
+                                  throw new Error(errorMsg);
                                 }
                               } catch (error) {
-                                alert("Error uploading images");
+                                console.error("Upload error:", error);
+                                alert(`❌ Error uploading images: ${error.message}\n\nMake sure:\n- Backend is running on port 8000\n- Files are valid images\n- You have permission to upload`);
+                              } finally {
+                                if (button) {
+                                  button.disabled = false;
+                                  if (originalText) button.textContent = originalText;
+                                }
                               }
                             };
                             input.click();
                           }}
-                          className="bg-primary"
+                          className="bg-primary hover:bg-primary/90"
                         >
                           <FiUpload className="mr-1" />
-                          Upload
+                          Upload Images
                         </Button>
                       )}
                       
                       {status === "current" && step.number === 3 && (
                         <Button 
                           size="sm"
-                          onClick={() => window.location.href = `/annotate?dataset=${dataset.id}`}
-                          className="bg-primary"
+                          onClick={() => {
+                            if (dataset.images.length === 0) {
+                              alert("Please upload images first!");
+                              return;
+                            }
+                            window.location.href = `/annotate?dataset=${dataset.id}`;
+                          }}
+                          className="bg-primary hover:bg-primary/90"
                         >
                           <FiEdit className="mr-1" />
-                          Annotate
+                          Start Annotating
                         </Button>
                       )}
                       
@@ -281,35 +434,42 @@ export default function DatasetWorkflow({ dataset, onRefresh }) {
                         <Button 
                           size="sm"
                           onClick={async () => {
+                            if (stats?.annotated_images !== stats?.total_images) {
+                              alert(`Please annotate all images first!\n\nCurrent: ${stats?.annotated_images || 0} / ${stats?.total_images || 0} annotated`);
+                              return;
+                            }
+                            
                             try {
                               const response = await fetch(`http://localhost:8000/api/annotations/datasets/${dataset.id}/export`, {
                                 method: "POST"
                               });
                               const data = await response.json();
                               if (data.success) {
-                                alert(`Dataset exported! Train: ${data.train_images}, Val: ${data.val_images}`);
+                                alert(`✅ Dataset exported successfully!\n\nTraining set: ${data.train_images} images\nValidation set: ${data.val_images} images\n\nYou can now proceed to training.`);
                                 onRefresh();
+                              } else {
+                                alert(`Error: ${data.detail || "Failed to export dataset"}`);
                               }
                             } catch (error) {
-                              alert("Error exporting dataset");
+                              alert("Error exporting dataset. Make sure backend is running.");
                             }
                           }}
-                          className="bg-primary"
+                          className="bg-primary hover:bg-primary/90"
                         >
                           <FiDownload className="mr-1" />
-                          Export
+                          Export Dataset
                         </Button>
                       )}
                       
                       {status === "pending" && (
                         <Badge variant="secondary" className="text-xs">
-                          Pending
+                          {!canProceedToStep(step.number) ? "Complete previous steps" : "Pending"}
                         </Badge>
                       )}
                       
                       {status === "complete" && (
                         <Badge className="bg-green-500/20 text-green-500 border-green-500/30 text-xs">
-                          ✓ Done
+                          ✓ Complete
                         </Badge>
                       )}
                     </div>
@@ -329,21 +489,29 @@ export default function DatasetWorkflow({ dataset, onRefresh }) {
           {/* Complete Training Button */}
           {stats?.completion_percentage === 100 && (
             <div className="pt-4 border-t border-border">
+              <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4 mb-4">
+                <p className="text-sm text-green-500 font-semibold mb-2">
+                  🎉 All Steps Complete!
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Your dataset is ready for training. Click below to start training your model.
+                </p>
+              </div>
               <Button 
                 className="w-full bg-green-600 hover:bg-green-700 text-white"
                 size="lg"
                 onClick={async () => {
-                  if (!confirm("Start training with this dataset?")) return;
+                  if (!confirm("Ready to start training?\n\nThis will:\n1. Export your dataset (if not already done)\n2. Start training with YOLOv8\n3. Monitor progress in Training tab\n\nContinue?")) return;
                   
                   try {
-                    // Export first
+                    // Export first (ensure it's exported)
                     const exportResponse = await fetch(`http://localhost:8000/api/annotations/datasets/${dataset.id}/export`, {
                       method: "POST"
                     });
                     const exportData = await exportResponse.json();
                     
                     if (!exportData.success) {
-                      alert("Failed to export dataset");
+                      alert("Failed to export dataset. Please try exporting manually first.");
                       return;
                     }
                     
@@ -365,10 +533,14 @@ export default function DatasetWorkflow({ dataset, onRefresh }) {
                     const trainData = await trainingResponse.json();
                     
                     if (trainData.success) {
-                      alert(`Training started! Job ID: ${trainData.job_id}\nGo to Training tab to monitor.`);
+                      alert(`✅ Training started successfully!\n\nJob ID: ${trainData.job_id}\n\nGo to the "Training" tab to monitor progress.`);
+                      // Optionally redirect to training tab
+                      window.location.hash = "#training";
+                    } else {
+                      alert(`Error: ${trainData.detail || "Failed to start training"}`);
                     }
                   } catch (error) {
-                    alert("Error starting training. Make sure backend is running.");
+                    alert("Error starting training. Make sure backend is running and dataset is exported.");
                   }
                 }}
               >
@@ -377,6 +549,18 @@ export default function DatasetWorkflow({ dataset, onRefresh }) {
               </Button>
             </div>
           )}
+          
+          {/* Instructions */}
+          <div className="pt-4 border-t border-border mt-4">
+            <p className="text-xs text-muted-foreground mb-2 font-semibold">📋 Instructions:</p>
+            <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
+              <li>Create dataset with name and classes (comma-separated)</li>
+              <li>Upload images (minimum 10-20 recommended)</li>
+              <li>Annotate all images by drawing bounding boxes</li>
+              <li>Export dataset to YOLO format</li>
+              <li>Start training your custom model</li>
+            </ol>
+          </div>
         </div>
       </CardContent>
     </Card>

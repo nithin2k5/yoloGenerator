@@ -96,39 +96,110 @@ async def upload_images_to_dataset(
     if dataset_id not in datasets_db:
         raise HTTPException(status_code=404, detail="Dataset not found")
     
-    dataset_dir = Path(f"datasets/{dataset_id}/images")
-    uploaded_files = []
+    # Validate files list
+    if not files or len(files) == 0:
+        raise HTTPException(status_code=400, detail="No files provided")
     
+    # Create dataset directory if it doesn't exist
+    dataset_dir = Path(f"datasets/{dataset_id}/images")
+    dataset_dir.mkdir(parents=True, exist_ok=True)
+    
+    uploaded_files = []
+    errors = []
+    
+    # Validate and process each file
     for file in files:
-        image_id = str(uuid.uuid4())
-        file_ext = Path(file.filename).suffix
-        new_filename = f"{image_id}{file_ext}"
-        file_path = dataset_dir / new_filename
-        
-        async with aiofiles.open(file_path, 'wb') as out_file:
-            content = await file.read()
-            await out_file.write(content)
-        
-        # Add to dataset
-        image_info = {
-            "id": image_id,
-            "filename": new_filename,
-            "original_name": file.filename,
-            "path": str(file_path),
-            "annotated": False,
-            "uploaded_at": datetime.now().isoformat()
-        }
-        
-        datasets_db[dataset_id]["images"].append(image_info)
-        uploaded_files.append(image_info)
+        try:
+            # Check if file has a filename
+            if not file.filename:
+                errors.append("Unknown file: Missing filename")
+                continue
+            
+            # Validate file type
+            if not file.content_type or not file.content_type.startswith('image/'):
+                errors.append(f"{file.filename}: Not a valid image file (content-type: {file.content_type})")
+                continue
+            
+            image_id = str(uuid.uuid4())
+            file_ext = Path(file.filename).suffix.lower()
+            
+            # If no extension, try to infer from content type
+            if not file_ext:
+                content_type_map = {
+                    'image/jpeg': '.jpg',
+                    'image/jpg': '.jpg',
+                    'image/png': '.png',
+                    'image/gif': '.gif',
+                    'image/bmp': '.bmp',
+                    'image/webp': '.webp'
+                }
+                file_ext = content_type_map.get(file.content_type, '.jpg')
+            
+            # Ensure valid extension
+            if file_ext not in ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp']:
+                errors.append(f"{file.filename}: Unsupported image format ({file_ext})")
+                continue
+            
+            new_filename = f"{image_id}{file_ext}"
+            file_path = dataset_dir / new_filename
+            
+            # Read and write file (with size check)
+            file_content = await file.read()
+            
+            # Validate file size (max 50MB per file)
+            if len(file_content) > 50 * 1024 * 1024:  # 50MB
+                errors.append(f"{file.filename}: File too large (max 50MB, got {len(file_content) / 1024 / 1024:.2f}MB)")
+                continue
+            
+            # Validate minimum file size (at least 100 bytes)
+            if len(file_content) < 100:
+                errors.append(f"{file.filename}: File too small or corrupted")
+                continue
+            
+            # Write file
+            async with aiofiles.open(file_path, 'wb') as out_file:
+                await out_file.write(file_content)
+            
+            # Verify file was written
+            if not file_path.exists() or file_path.stat().st_size == 0:
+                errors.append(f"{file.filename}: Failed to write file")
+                continue
+            
+            # Add to dataset
+            image_info = {
+                "id": image_id,
+                "filename": new_filename,
+                "original_name": file.filename,
+                "path": str(file_path),
+                "annotated": False,
+                "uploaded_at": datetime.now().isoformat()
+            }
+            
+            datasets_db[dataset_id]["images"].append(image_info)
+            uploaded_files.append(image_info)
+            
+        except Exception as e:
+            import traceback
+            error_msg = f"{file.filename if file.filename else 'Unknown file'}: {str(e)}"
+            errors.append(error_msg)
+            print(f"Error uploading file: {error_msg}")
+            print(traceback.format_exc())
+            continue
     
     datasets_db[dataset_id]["updated_at"] = datetime.now().isoformat()
     
-    return JSONResponse(content={
-        "success": True,
+    # Return response
+    response_data = {
+        "success": len(uploaded_files) > 0,
         "uploaded": len(uploaded_files),
         "files": uploaded_files
-    })
+    }
+    
+    if errors:
+        response_data["errors"] = errors
+        response_data["error_count"] = len(errors)
+    
+    return JSONResponse(content=response_data)
 
 @router.post("/annotations/save")
 async def save_annotation(request: dict):
