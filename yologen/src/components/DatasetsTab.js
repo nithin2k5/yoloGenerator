@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -8,11 +9,12 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { FiFolder, FiPlus, FiRefreshCw, FiEdit, FiPlay, FiEye, FiBarChart2, FiTrash2, FiDownload } from "react-icons/fi";
+import { FiFolder, FiPlus, FiRefreshCw, FiEdit, FiPlay, FiEye, FiBarChart2, FiTrash2, FiDownload, FiUpload, FiArrowRight } from "react-icons/fi";
 import { API_ENDPOINTS } from "@/lib/config";
 import DatasetWorkflow from "@/components/DatasetWorkflow";
 
 export default function DatasetsTab() {
+  const router = useRouter();
   const [datasets, setDatasets] = useState([]);
   const [isCreating, setIsCreating] = useState(false);
   const [selectedDataset, setSelectedDataset] = useState(null);
@@ -21,8 +23,33 @@ export default function DatasetsTab() {
   const [newDataset, setNewDataset] = useState({
     name: "",
     description: "",
-    classes: ""
+    classes: "",
+    step: 0,
+    createdId: null,
+    createdName: ""
   });
+
+  const handleUploadImages = async (datasetId, files) => {
+    const formData = new FormData();
+    files.forEach(file => formData.append("files", file));
+
+    try {
+      const response = await fetch(API_ENDPOINTS.DATASETS.UPLOAD(datasetId), {
+        method: "POST",
+        body: formData
+      });
+      const data = await response.json();
+      if (data.success) {
+        alert(`Success! ${data.uploaded} images uploaded.`);
+        // Auto proceed or let user choose? Let user choose via Continue button
+      } else {
+        alert(`Upload failed: ${data.detail}`);
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Upload error");
+    }
+  };
 
   useEffect(() => {
     fetchDatasets();
@@ -74,8 +101,15 @@ export default function DatasetsTab() {
       const data = await response.json();
 
       if (data.success) {
-        setNewDataset({ name: "", description: "", classes: "" });
+        // Update state to show upload step
+        setNewDataset(prev => ({
+          ...prev,
+          step: 1,
+          createdId: data.dataset_id,
+          createdName: prev.name
+        }));
         await fetchDatasets();
+        // Remove immediate redirect, let the user upload first
       }
     } catch (error) {
       console.error("Error creating dataset:", error);
@@ -156,30 +190,71 @@ export default function DatasetsTab() {
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>New Dataset</DialogTitle>
-                <DialogDescription>Create a new dataset for annotation.</DialogDescription>
+                <DialogTitle>{newDataset.step === 1 ? "Upload Images" : "New Dataset"}</DialogTitle>
+                <DialogDescription>
+                  {newDataset.step === 1 ? "Upload images to your new dataset." : "Create a new dataset for annotation."}
+                </DialogDescription>
               </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label>Name</Label>
-                  <Input
-                    value={newDataset.name}
-                    onChange={(e) => setNewDataset({ ...newDataset, name: e.target.value })}
-                    placeholder="e.g. My Dataset"
-                  />
+
+              {newDataset.step === 1 ? (
+                <div className="space-y-4 py-4">
+                  <div className="border-2 border-dashed border-border rounded-lg p-8 text-center hover:bg-muted/50 transition-colors">
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Target Dataset: <strong>{newDataset.createdName}</strong>
+                    </p>
+                    <Button variant="secondary" onClick={() => document.getElementById('upload-input').click()}>
+                      <FiUpload className="mr-2" /> Select Images
+                    </Button>
+                    <input
+                      id="upload-input"
+                      type="file"
+                      multiple
+                      accept="image/*"
+                      className="hidden"
+                      onChange={async (e) => {
+                        if (e.target.files.length > 0) {
+                          await handleUploadImages(newDataset.createdId, Array.from(e.target.files));
+                        }
+                      }}
+                    />
+                  </div>
+                  <div className="flex justify-end gap-2 pt-4">
+                    <Button variant="ghost" onClick={() => {
+                      setNewDataset(prev => ({ ...prev, step: 0 }));
+                      router.push(`/annotate?dataset=${newDataset.createdId}`);
+                    }}>
+                      Skip
+                    </Button>
+                    <Button onClick={() => router.push(`/annotate?dataset=${newDataset.createdId}`)}>
+                      Continue to Annotate <FiArrowRight className="ml-2" />
+                    </Button>
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label>Classes (comma separated)</Label>
-                  <Input
-                    value={newDataset.classes}
-                    onChange={(e) => setNewDataset({ ...newDataset, classes: e.target.value })}
-                    placeholder="cat, dog"
-                  />
-                </div>
-              </div>
-              <Button onClick={handleCreateDataset} disabled={isCreating} className="w-full">
-                {isCreating ? "Creating..." : "Create"}
-              </Button>
+              ) : (
+                <>
+                  <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                      <Label>Name</Label>
+                      <Input
+                        value={newDataset.name}
+                        onChange={(e) => setNewDataset({ ...newDataset, name: e.target.value })}
+                        placeholder="e.g. My Dataset"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Classes (comma separated)</Label>
+                      <Input
+                        value={newDataset.classes}
+                        onChange={(e) => setNewDataset({ ...newDataset, classes: e.target.value })}
+                        placeholder="cat, dog"
+                      />
+                    </div>
+                  </div>
+                  <Button onClick={handleCreateDataset} disabled={isCreating} className="w-full">
+                    {isCreating ? "Creating..." : "Next: Upload Images"}
+                  </Button>
+                </>
+              )}
             </DialogContent>
           </Dialog>
         </div>

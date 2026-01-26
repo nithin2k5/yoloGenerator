@@ -23,7 +23,7 @@ export default function UnauthorizedPage() {
         <CardContent className="space-y-4">
           <div className="p-4 rounded-lg bg-muted/30 border border-border/50">
             <p className="text-sm text-muted-foreground">
-              This page or action requires special permissions that your current role doesn't have.
+              This page or action requires special permissions that your current role doesn&apos;t have.
               Please contact an administrator if you believe this is an error.
             </p>
           </div>

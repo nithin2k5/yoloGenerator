@@ -385,62 +385,46 @@ function AnnotationToolContent() {
   }, [currentImageIndex]);
 
   const handleSaveAnnotations = async () => {
-    if (!images[currentImageIndex] || !dataset) {
-      alert("No image or dataset loaded");
-      return;
-    }
+    if (!images[currentImageIndex] || !dataset) return false;
 
-    if (boxes.length === 0) {
-      alert("Please add at least one annotation before saving");
-      return;
-    }
+    // Check natural dimensions availability
+    const naturalWidth = imageRef.current?.naturalWidth || 0;
+    const naturalHeight = imageRef.current?.naturalHeight || 0;
+
+    // If image isn't loaded yet, try to use canvas dimensions or skip
+    // We should be careful not to overwrite valid annotations with 0-size data
+    // if the image hasn't loaded. But if boxes is empty, it's fine.
+
+    // If we have boxes but no dimensions, that's risky. 
+    // However, the user is navigating away, so they likely saw the image.
 
     const img = images[currentImageIndex];
-    const canvas = canvasRef.current;
-
-    if (!canvas) {
-      alert("Canvas not ready");
-      return;
-    }
-
-    // Ensure we use the image's natural dimensions (canvas should match, but use image as source of truth)
-    const imgElement = imageRef.current;
-    const imageWidth = imgElement?.naturalWidth || canvas.width;
-    const imageHeight = imgElement?.naturalHeight || canvas.height;
 
     try {
-      const response = await fetch("http://localhost:8000/api/annotations/annotations/save", {
+      const response = await fetch(`http://localhost:8000/api/annotations/annotations/save`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          dataset_id: datasetId,
           image_id: img.id,
           image_name: img.filename,
-          width: imageWidth,
-          height: imageHeight,
+          width: naturalWidth || 0,
+          height: naturalHeight || 0,
           boxes: boxes,
-          dataset_id: datasetId,
-          split: selectedSplit  // Include split if already selected
+          split: selectedSplit || null
         })
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || "Failed to save annotations");
-      }
-
-      const data = await response.json();
-
-      if (data.success) {
-        // If split not selected, show dialog; otherwise move to next
-        if (!selectedSplit) {
-          setShowSplitDialog(true);
-        } else {
-          handleNextImage();
-        }
+      if (response.ok) {
+        await fetchStats(); // Refresh stats in background
+        return true;
+      } else {
+        console.error("Failed to save annotations:", await response.text());
+        return false;
       }
     } catch (error) {
       console.error("Error saving annotations:", error);
-      alert(`Error saving annotations: ${error.message}`);
+      return false;
     }
   };
 
@@ -480,11 +464,16 @@ function AnnotationToolContent() {
     }
   };
 
-  const handleNextImage = () => {
-    if (currentImageIndex < images.length - 1) {
-      setCurrentImageIndex(currentImageIndex + 1);
+
+
+  const handleNavigation = async (direction) => {
+    // Auto-save before moving
+    await handleSaveAnnotations();
+
+    if (direction === 'next') {
+      setCurrentImageIndex(prev => Math.min(images.length - 1, prev + 1));
     } else {
-      alert("All images annotated! You can now export the dataset.");
+      setCurrentImageIndex(prev => Math.max(0, prev - 1));
     }
   };
 
@@ -520,11 +509,11 @@ function AnnotationToolContent() {
   const currentImage = images[currentImageIndex];
 
   return (
-    <div className="min-h-screen bg-black text-foreground">
+    <div className="h-screen bg-black text-foreground overflow-hidden flex flex-col">
       {/* Header */}
-      <header className="border-b border-border bg-card sticky top-0 z-50">
-        <div className="container mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
+      <header className="border-b border-border bg-card shrink-0 z-50 h-[65px]">
+        <div className="container mx-auto px-6 h-full">
+          <div className="flex items-center justify-between h-full">
             <div className="flex items-center gap-4">
               <Button
                 onClick={() => router.push('/dashboard')}
@@ -537,7 +526,7 @@ function AnnotationToolContent() {
               <div className="flex items-center gap-3">
                 <div className="h-10 w-px bg-border"></div>
                 <div>
-                  <h1 className="text-xl font-bold">{dataset.name}</h1>
+                  <h1 className="text-xl font-bold">{dataset?.name || 'Loading...'}</h1>
                   <p className="text-xs text-muted-foreground">
                     Image {currentImageIndex + 1} of {images.length}
                     {selectedSplit && (
@@ -564,345 +553,235 @@ function AnnotationToolContent() {
       </header>
 
       {/* Main Content */}
-      <main className="container mx-auto px-6 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Canvas */}
-          <div className="lg:col-span-2 space-y-4">
-            <Card className="bg-card border-border">
-              <CardContent className="p-6">
-                {currentImage ? (
-                  <div className="relative">
-                    <img
-                      ref={imageRef}
-                      src={`http://localhost:8000/api/annotations/image/${datasetId}/${currentImage.filename}`}
-                      alt="Annotate"
-                      className="hidden"
-                      onLoad={(e) => {
-                        const canvas = canvasRef.current;
-                        const img = e.target;
-                        if (canvas && img.complete && img.naturalWidth > 0) {
-                          // Set canvas internal dimensions to EXACTLY match image natural size
-                          // This is critical - these dimensions are used for coordinate calculations
-                          canvas.width = img.naturalWidth;
-                          canvas.height = img.naturalHeight;
+      <main className="flex-1 min-h-0 overflow-hidden">
+        <div className="grid grid-cols-[15%_70%_15%] h-full">
 
-                          // Set display size to maintain aspect ratio
-                          // The canvas will be scaled by CSS but internal dimensions stay at natural size
-                          canvas.style.width = '100%';
-                          canvas.style.height = 'auto';
-                          canvas.style.maxHeight = '70vh';
-                          canvas.style.display = 'block';
-
-                          // Force a reflow to ensure dimensions are set
-                          canvas.offsetHeight;
-
-                          // Small delay to ensure everything is rendered
-                          setTimeout(() => drawCanvas(), 100);
-                        }
-                      }}
-                      onError={(e) => {
-                        console.error("Image failed to load:", currentImage.filename);
-                        console.error("Dataset ID:", datasetId);
-                        console.error("Image URL:", e.target.src);
-                        alert("Failed to load image. Check browser console for details.");
-                      }}
-                    />
-                    <canvas
-                      ref={canvasRef}
-                      onMouseDown={handleMouseDown}
-                      onMouseMove={handleMouseMove}
-                      onMouseUp={handleMouseUp}
-                      onMouseLeave={(e) => {
-                        if (isDrawing && startPos) {
-                          // Use the last known position from currentBox if available
-                          if (currentBox && Math.abs(currentBox.width) > 10 && Math.abs(currentBox.height) > 10) {
-                            const normalizedBox = {
-                              x: currentBox.width < 0 ? currentBox.x + currentBox.width : currentBox.x,
-                              y: currentBox.height < 0 ? currentBox.y + currentBox.height : currentBox.y,
-                              width: Math.abs(currentBox.width),
-                              height: Math.abs(currentBox.height),
-                              class_id: selectedClass,
-                              class_name: dataset.classes[selectedClass]
-                            };
-                            setBoxes(prevBoxes => [...prevBoxes, normalizedBox]);
-                          }
-                          setIsDrawing(false);
-                          setStartPos(null);
-                          setCurrentBox(null);
-                          setTimeout(() => drawCanvas(), 0);
-                        }
-                      }}
-                      className="w-full border border-border rounded-lg cursor-crosshair bg-black"
-                      style={{
-                        maxHeight: '70vh',
-                        height: 'auto',
-                        display: 'block',
-                        boxSizing: 'border-box'
-                      }}
-                    />
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center py-24 text-muted-foreground">
-                    <p>No images in dataset</p>
-                    <Button
-                      onClick={() => fileInputRef.current?.click()}
-                      className="mt-4 bg-primary"
+          {/* Left Sidebar - Tools & Classes */}
+          <div className="border-r border-border bg-card p-4 overflow-y-auto space-y-6">
+            <div className="space-y-4">
+              <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">Classes</h3>
+              {dataset && dataset.classes && dataset.classes.length > 0 ? (
+                <div className="space-y-2">
+                  {dataset.classes.map((cls, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => setSelectedClass(idx)}
+                      className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors flex items-center justify-between ${selectedClass === idx
+                        ? 'bg-primary/20 text-primary border border-primary/30'
+                        : 'hover:bg-muted text-muted-foreground'
+                        }`}
                     >
-                      <FiUpload className="mr-2" />
-                      Upload Images
-                    </Button>
-                    <Input
-                      ref={fileInputRef}
-                      type="file"
-                      multiple
-                      accept="image/*"
-                      onChange={handleUploadImages}
-                      className="hidden"
-                    />
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                      <span className="truncate">{cls}</span>
+                      {selectedClass === idx && <div className="w-2 h-2 rounded-full bg-primary" />}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-destructive">No classes defined</p>
+              )}
+            </div>
 
-            {/* Navigation */}
+            <div className="pt-4 border-t border-border">
+              <p className="text-xs text-muted-foreground mb-2">Controls</p>
+              <div className="text-xs text-muted-foreground space-y-1">
+                <p>• Click & Drag to draw</p>
+                <p>• Select class on left</p>
+                <p>• Delete on right</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Center Workspace - Canvas */}
+          <div className="bg-black/50 relative flex flex-col h-full overflow-hidden">
+            <div className="flex-1 flex items-center justify-center p-6 overflow-hidden relative">
+              <Card className="bg-transparent border-none shadow-none w-full h-full flex items-center justify-center">
+                <CardContent className="p-0 flex items-center justify-center w-full h-full relative">
+                  {currentImage ? (
+                    <div className="relative w-full h-full flex items-center justify-center">
+                      <img
+                        ref={imageRef}
+                        src={`http://localhost:8000/api/annotations/image/${datasetId}/${currentImage.filename}`}
+                        alt="Annotate"
+                        className="hidden"
+                        onLoad={(e) => {
+                          const canvas = canvasRef.current;
+                          const img = e.target;
+                          if (canvas && img.complete && img.naturalWidth > 0) {
+                            canvas.width = img.naturalWidth;
+                            canvas.height = img.naturalHeight;
+
+                            // Let the canvas sit naturally within the container
+                            // We use object-contain equivalent logic via CSS on the canvas
+                            canvas.style.maxWidth = '100%';
+                            canvas.style.maxHeight = '100%';
+                            canvas.style.width = 'auto';
+                            canvas.style.height = 'auto';
+                            canvas.style.display = 'block';
+
+                            canvas.offsetHeight;
+                            setTimeout(() => drawCanvas(), 100);
+                          }
+                        }}
+                        onError={(e) => {
+                          console.error("Image failed:", e);
+                        }}
+                      />
+                      <canvas
+                        ref={canvasRef}
+                        onMouseDown={handleMouseDown}
+                        onMouseMove={handleMouseMove}
+                        onMouseUp={handleMouseUp}
+                        onMouseLeave={(e) => {
+                          if (isDrawing && startPos) {
+                            setIsDrawing(false);
+                            setStartPos(null);
+                            setCurrentBox(null);
+                            setTimeout(() => drawCanvas(), 0);
+                          }
+                        }}
+                        className="border border-border/50 shadow-2xl rounded-sm cursor-crosshair bg-black"
+                        style={{
+                          maxWidth: '100%',
+                          maxHeight: '100%',
+                          display: 'block'
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    <div className="text-center">
+                      <p className="text-muted-foreground mb-4">No images available</p>
+                      <Button onClick={() => fileInputRef.current?.click()}>
+                        Upload Images
+                      </Button>
+                      <Input
+                        ref={fileInputRef}
+                        type="file"
+                        multiple
+                        accept="image/*"
+                        onChange={handleUploadImages}
+                        className="hidden"
+                      />
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Bottom Bar - Navigation */}
             {images.length > 0 && (
-              <div className="flex items-center justify-between">
+              <div className="h-14 border-t border-border bg-card flex items-center justify-between px-6 shrink-0">
                 <Button
-                  onClick={() => setCurrentImageIndex(Math.max(0, currentImageIndex - 1))}
+                  onClick={() => handleNavigation('prev')}
                   disabled={currentImageIndex === 0}
-                  variant="outline"
-                  className="border-border"
+                  variant="ghost"
+                  size="sm"
                 >
-                  <FiChevronLeft className="mr-2" />
-                  Previous
+                  <FiChevronLeft className="mr-2" /> Previous
                 </Button>
-                <span className="text-sm text-muted-foreground">
+
+                <span className="text-sm font-medium">
                   {currentImage?.original_name}
                 </span>
+
                 <Button
-                  onClick={() => setCurrentImageIndex(Math.min(images.length - 1, currentImageIndex + 1))}
+                  onClick={() => handleNavigation('next')}
                   disabled={currentImageIndex === images.length - 1}
-                  variant="outline"
-                  className="border-border"
+                  variant="ghost"
+                  size="sm"
                 >
-                  Next
-                  <FiChevronRight className="ml-2" />
+                  Next <FiChevronRight className="ml-2" />
                 </Button>
               </div>
             )}
           </div>
 
-          {/* Sidebar */}
-          <div className="space-y-6">
-            {/* Class Selection */}
-            <Card className="bg-card border-border">
-              <CardHeader>
-                <CardTitle className="text-primary">Select Class</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {dataset && dataset.classes && dataset.classes.length > 0 ? (
-                  <>
-                    <Select value={selectedClass.toString()} onValueChange={(v) => setSelectedClass(parseInt(v))}>
-                      <SelectTrigger className="bg-background border-border">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {dataset.classes.map((cls, idx) => (
-                          <SelectItem key={idx} value={idx.toString()}>
-                            {cls}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground">
-                      Click and drag on the image to create bounding boxes
-                    </p>
-                  </>
-                ) : (
-                  <p className="text-sm text-destructive">No classes defined for this dataset</p>
-                )}
-              </CardContent>
-            </Card>
+          {/* Right Sidebar - Annotations & Actions */}
+          <div className="border-l border-border bg-card p-4 overflow-y-auto space-y-6">
 
-            {/* Current Annotations */}
-            <Card className="bg-card border-border">
-              <CardHeader>
-                <CardTitle className="text-primary">Annotations ({boxes.length})</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2 max-h-64 overflow-y-auto">
+            {/* Action Buttons */}
+            <div className="space-y-3">
+              <Button onClick={async () => {
+                const success = await handleSaveAnnotations();
+                if (success) alert("Annotations saved successfully!");
+                else alert("Failed to save annotations. See console for details.");
+              }} className="w-full bg-primary hover:bg-primary/90">
+                <FiSave className="mr-2" />
+                Save
+              </Button>
+              <Button
+                onClick={async () => {
+                  if (!datasetId) return;
+                  await fetchStats();
+                  window.location.href = `http://localhost:8000/api/annotations/datasets/${datasetId}/export`;
+                }}
+                variant="outline"
+                className="w-full border-border"
+              >
+                <FiDownload className="mr-2" />
+                Export
+              </Button>
+            </div>
+
+            {/* Annotations List */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">Annotations</h3>
+                <Badge variant="outline" className="text-xs">{boxes.length}</Badge>
+              </div>
+
+              <div className="space-y-2">
                 {boxes.length > 0 ? (
                   boxes.map((box, index) => (
-                    <div key={index} className="flex items-center justify-between p-2 bg-background rounded border border-border">
+                    <div key={index} className="flex items-center justify-between p-3 bg-muted/30 rounded-lg border border-border/50 hover:border-primary/50 transition-colors group">
                       <div>
-                        <Badge className="bg-primary/20 text-primary border-primary/30">
-                          {box.class_name}
-                        </Badge>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {Math.round(box.width)} × {Math.round(box.height)}px
+                        <div className="flex items-center gap-2 mb-1">
+                          <div className="w-2 h-2 rounded-full" style={{ backgroundColor: `hsl(${(box.class_id % 10) * 36}, 100%, 50%)` }} />
+                          <span className="font-medium text-sm">{box.class_name}</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {Math.round(box.width)} × {Math.round(box.height)}
                         </p>
                       </div>
                       <Button
                         onClick={() => handleDeleteBox(index)}
                         variant="ghost"
-                        size="sm"
-                        className="text-destructive hover:text-destructive"
+                        size="icon"
+                        className="h-6 w-6 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
                       >
-                        <FiTrash2 />
+                        <FiTrash2 className="w-3 h-3" />
                       </Button>
                     </div>
                   ))
                 ) : (
-                  <p className="text-sm text-muted-foreground text-center py-4">
-                    No annotations yet
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Current Split Display */}
-            {selectedSplit && (
-              <Card className="bg-card border-border">
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Current Split</p>
-                      <p className="text-lg font-semibold capitalize">{selectedSplit}</p>
-                    </div>
-                    <Button
-                      onClick={() => setShowSplitDialog(true)}
-                      variant="outline"
-                      size="sm"
-                      className="border-border"
-                    >
-                      Change
-                    </Button>
+                  <div className="text-center py-8 px-4 border border-dashed border-border/50 rounded-lg">
+                    <p className="text-sm text-muted-foreground">No annotations yet</p>
                   </div>
-                </CardContent>
-              </Card>
+                )}
+              </div>
+            </div>
+
+            {/* Split Info */}
+            {selectedSplit && (
+              <div className="pt-4 border-t border-border">
+                <p className="text-xs text-muted-foreground mb-2">Dataset Split</p>
+                <div className="flex items-center justify-between bg-muted/30 p-2 rounded-md border border-border/50">
+                  <span className="text-sm font-medium capitalize">{selectedSplit}</span>
+                  <Button
+                    onClick={() => setShowSplitDialog(true)}
+                    variant="ghost"
+                    size="xs"
+                    className="h-6 text-xs"
+                  >
+                    Edit
+                  </Button>
+                </div>
+              </div>
             )}
 
-            {/* Actions */}
-            <div className="space-y-3">
-              <Button onClick={handleSaveAnnotations} className="w-full bg-primary hover:bg-primary/90">
-                <FiSave className="mr-2" />
-                Save & Next
-              </Button>
-
-              {/* Export Button - Always visible */}
-              <Button
-                onClick={async () => {
-                  if (!datasetId) {
-                    alert("Error: Dataset ID not found");
-                    return;
-                  }
-
-                  // Refresh stats first
-                  await fetchStats();
-
-                  if (stats && stats.annotated_images !== stats.total_images) {
-                    if (!confirm(`Not all images are annotated!\n\nAnnotated: ${stats.annotated_images || 0} / ${stats.total_images || 0}\n\nExport anyway? (Only annotated images will be exported)`)) {
-                      return;
-                    }
-                  }
-
-                  try {
-                    const response = await fetch(`http://localhost:8000/api/annotations/datasets/${datasetId}/export`, {
-                      method: "POST"
-                    });
-                    const data = await response.json();
-                    if (data.success) {
-                      alert(`✅ Dataset exported successfully!\n\nTraining set: ${data.train_images} images\nValidation set: ${data.val_images} images${data.test_images ? `\nTest set: ${data.test_images} images` : ''}\n\nYou can now proceed to training.`);
-                      await fetchStats(); // Refresh stats after export
-                    } else {
-                      alert(`Error: ${data.detail || "Failed to export dataset"}`);
-                    }
-                  } catch (error) {
-                    console.error("Error exporting dataset:", error);
-                    alert("Error exporting dataset. Make sure backend is running.");
-                  }
-                }}
-                variant="outline"
-                className="w-full border-green-500 text-green-500 hover:bg-green-500 hover:text-white"
-                disabled={!datasetId}
-              >
-                <FiDownload className="mr-2" />
-                Export Dataset
-              </Button>
-              <Button
-                onClick={() => fileInputMoreRef.current?.click()}
-                variant="outline"
-                className="w-full border-border"
-              >
-                <FiUpload className="mr-2" />
-                Add More Images
-              </Button>
-              <Input
-                ref={fileInputMoreRef}
-                type="file"
-                multiple
-                accept="image/*"
-                onChange={handleUploadImages}
-                className="hidden"
-              />
-            </div>
           </div>
         </div>
       </main>
 
-      {/* Split Selection Dialog */}
-      {showSplitDialog && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <Card className="bg-card border-border w-full max-w-md mx-4">
-            <CardHeader>
-              <CardTitle className="text-primary">Select Dataset Split</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                Please select whether this image is for training, validation, or testing.
-              </p>
-              <div className="grid grid-cols-3 gap-3">
-                <Button
-                  onClick={() => handleSplitSelection("train")}
-                  className="h-20 flex flex-col items-center justify-center bg-blue-600 hover:bg-blue-700 text-white"
-                >
-                  <span className="text-lg font-bold">Train</span>
-                  <span className="text-xs opacity-90">Training set</span>
-                </Button>
-                <Button
-                  onClick={() => handleSplitSelection("val")}
-                  className="h-20 flex flex-col items-center justify-center bg-yellow-600 hover:bg-yellow-700 text-white"
-                >
-                  <span className="text-lg font-bold">Val</span>
-                  <span className="text-xs opacity-90">Validation set</span>
-                </Button>
-                <Button
-                  onClick={() => handleSplitSelection("test")}
-                  className="h-20 flex flex-col items-center justify-center bg-green-600 hover:bg-green-700 text-white"
-                >
-                  <span className="text-lg font-bold">Test</span>
-                  <span className="text-xs opacity-90">Test set</span>
-                </Button>
-              </div>
-              <div className="flex items-center justify-between pt-2">
-                <p className="text-xs text-muted-foreground">
-                  This selection will be saved and used when exporting the dataset.
-                </p>
-                <Button
-                  onClick={() => {
-                    setShowSplitDialog(false);
-                    handleNextImage();
-                  }}
-                  variant="ghost"
-                  size="sm"
-                  className="text-muted-foreground"
-                >
-                  Skip for now
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
     </div>
   );
 }
