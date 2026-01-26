@@ -4,7 +4,8 @@
 
 @layer base {
   :root {
-    --background: 0 0% 0%; /* Black background */
+    --background: 0 0% 0%;
+    /* Black background */
     --foreground: 0 0% 98%;
 
     --card: 0 0% 8%;
@@ -13,7 +14,8 @@
     --popover: 0 0% 8%;
     --popover-foreground: 0 0% 98%;
 
-    --primary: 0 0% 90%; /* Neutral light gray */
+    --primary: 0 0% 90%;
+    /* Neutral light gray */
     --primary-foreground: 0 0% 9%;
 
     --secondary: 0 0% 15%;
@@ -70,62 +72,69 @@
     --input: 0 0% 20%;
     --ring: 0 0% 90%;
   }
-}
 
-@layer base {
   * {
     @apply border-border;
   }
+
   body {
     @apply bg-background text-foreground;
     font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
-  
+
   /* Smooth scrolling */
   html {
     scroll-behavior: smooth;
   }
-  
-  /* Custom scrollbar */
+
+  /* Smooth scrollbar */
   ::-webkit-scrollbar {
     width: 10px;
     height: 10px;
   }
-  
+
   ::-webkit-scrollbar-track {
     background: hsl(var(--background));
   }
-  
+
   ::-webkit-scrollbar-thumb {
     background: hsl(var(--border));
     border-radius: 5px;
   }
-  
+
   ::-webkit-scrollbar-thumb:hover {
     background: hsl(var(--muted));
   }
-  
+
+  /* Utility classes for "Rich Aesthetics" */
+}
+
+@layer utilities {
+  /* Animations removed for cleaner UI */
+}
+
+
+@layer base {
+
   /* Better button animations */
   button {
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   }
-  
-  /* Card hover effects */
-  .card-hover {
-    transition: all 0.3s ease;
-  }
-  
-  .card-hover:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
-  }
-  
-  /* Smooth transitions */
-  * {
-    transition-property: background-color, border-color, color, fill, stroke, opacity, box-shadow, transform;
-    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-    transition-duration: 150ms;
-  }
+}
+
+/* Animations */
+
+
+.animation-delay-2000 {
+  animation-delay: 2s;
+}
+
+.animation-delay-4000 {
+  animation-delay: 4s;
+}
+
+.perspective-1000 {
+  perspective: 1000px;
 }

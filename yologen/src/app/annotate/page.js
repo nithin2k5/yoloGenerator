@@ -14,7 +14,7 @@ function AnnotationToolContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const datasetId = searchParams.get('dataset');
-  
+
   const [dataset, setDataset] = useState(null);
   const [images, setImages] = useState([]);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
@@ -25,7 +25,8 @@ function AnnotationToolContent() {
   const [currentBox, setCurrentBox] = useState(null);
   const [selectedSplit, setSelectedSplit] = useState(null);
   const [showSplitDialog, setShowSplitDialog] = useState(false);
-  
+  const [stats, setStats] = useState(null);
+
   const canvasRef = useRef(null);
   const imageRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -55,15 +56,15 @@ function AnnotationToolContent() {
   // Refresh stats periodically and when images change
   useEffect(() => {
     if (!datasetId) return;
-    
+
     // Initial fetch
     fetchStats();
-    
+
     // Refresh every 5 seconds
     const interval = setInterval(() => {
       fetchStats();
     }, 5000);
-    
+
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [datasetId]);
@@ -96,7 +97,7 @@ function AnnotationToolContent() {
 
   const fetchDataset = async () => {
     if (!datasetId) return;
-    
+
     try {
       const response = await fetch(`http://localhost:8000/api/annotations/datasets/${datasetId}`);
       if (!response.ok) {
@@ -113,9 +114,9 @@ function AnnotationToolContent() {
 
   const loadImage = async (index) => {
     if (!images[index] || !datasetId) return;
-    
+
     const img = images[index];
-    
+
     // Load existing annotations
     try {
       const response = await fetch(`http://localhost:8000/api/annotations/annotations/${datasetId}/${img.id}`);
@@ -129,7 +130,7 @@ function AnnotationToolContent() {
       console.error("Error loading annotations:", error);
       setBoxes([]);
     }
-    
+
     // Load split assignment
     setSelectedSplit(img.split || null);
     setShowSplitDialog(false);
@@ -153,7 +154,7 @@ function AnnotationToolContent() {
       const type = file.type.toLowerCase();
       return !validTypes.some(validType => type.includes(validType.split('/')[1]));
     });
-    
+
     if (invalidFiles.length > 0) {
       alert(`Invalid file types detected. Please upload only images (JPG, PNG, GIF, BMP, WEBP).\n\nInvalid files: ${invalidFiles.map(f => f.name).join(', ')}`);
       return;
@@ -184,7 +185,7 @@ function AnnotationToolContent() {
       }
 
       const data = await response.json();
-      
+
       if (data.success) {
         let message = `✅ ${data.uploaded} image${data.uploaded !== 1 ? 's' : ''} uploaded successfully!`;
         if (data.errors && data.errors.length > 0) {
@@ -211,59 +212,59 @@ function AnnotationToolContent() {
   const getCanvasCoordinates = (e) => {
     const canvas = canvasRef.current;
     if (!canvas || !e) return { x: 0, y: 0 };
-    
+
     const img = imageRef.current;
     if (!img || !img.complete || img.naturalWidth === 0 || !canvas.width || !canvas.height) {
       return { x: 0, y: 0 };
     }
-    
+
     // Get canvas bounding rectangle
     const rect = canvas.getBoundingClientRect();
-    
+
     // Get computed styles to account for borders
     const styles = window.getComputedStyle(canvas);
     const borderLeft = parseFloat(styles.borderLeftWidth) || 0;
     const borderRight = parseFloat(styles.borderRightWidth) || 0;
     const borderTop = parseFloat(styles.borderTopWidth) || 0;
     const borderBottom = parseFloat(styles.borderBottomWidth) || 0;
-    
+
     // Image natural dimensions (these are what we store annotations in)
     const imageWidth = img.naturalWidth;
     const imageHeight = img.naturalHeight;
-    
+
     // Canvas internal dimensions (should match image dimensions)
     const canvasWidth = canvas.width;
     const canvasHeight = canvas.height;
-    
+
     // Get displayed canvas dimensions (actual rendered size on screen, excluding borders)
     const displayWidth = rect.width - borderLeft - borderRight;
     const displayHeight = rect.height - borderTop - borderBottom;
-    
+
     // Calculate the actual scale factor
     // Canvas is scaled proportionally, so scale should be the same for both axes
     const scale = imageWidth / displayWidth;
-    
+
     // Get mouse position relative to canvas element (including borders in the offset)
     const mouseX = e.clientX - rect.left - borderLeft;
     const mouseY = e.clientY - rect.top - borderTop;
-    
+
     // Convert display coordinates to image coordinates
     const imageX = mouseX * scale;
     const imageY = mouseY * scale;
-    
+
     // Clamp to image bounds
     const clampedX = Math.max(0, Math.min(imageX, imageWidth));
     const clampedY = Math.max(0, Math.min(imageY, imageHeight));
-    
+
     return { x: clampedX, y: clampedY };
   };
 
   const handleMouseDown = (e) => {
     e.preventDefault();
     if (!canvasRef.current || !dataset) return;
-    
+
     const { x, y } = getCanvasCoordinates(e);
-    
+
     setIsDrawing(true);
     setStartPos({ x, y });
     setCurrentBox({ x, y, width: 0, height: 0 });
@@ -272,12 +273,12 @@ function AnnotationToolContent() {
   const handleMouseMove = (e) => {
     e.preventDefault();
     if (!isDrawing || !startPos || !canvasRef.current) return;
-    
+
     const { x, y } = getCanvasCoordinates(e);
-    
+
     const width = x - startPos.x;
     const height = y - startPos.y;
-    
+
     setCurrentBox({ x: startPos.x, y: startPos.y, width, height });
     drawCanvas();
   };
@@ -290,12 +291,12 @@ function AnnotationToolContent() {
       setCurrentBox(null);
       return;
     }
-    
+
     // Calculate final box dimensions from current mouse position
     const { x, y } = getCanvasCoordinates(e);
     const width = x - startPos.x;
     const height = y - startPos.y;
-    
+
     // Add box if it has reasonable size
     if (Math.abs(width) > 10 && Math.abs(height) > 10) {
       // Normalize negative dimensions
@@ -307,10 +308,10 @@ function AnnotationToolContent() {
         class_id: selectedClass,
         class_name: dataset.classes[selectedClass]
       };
-      
+
       // Use functional update to ensure we have the latest boxes
       setBoxes(prevBoxes => [...prevBoxes, normalizedBox]);
-      
+
       // Force canvas redraw after state update
       setTimeout(() => {
         setCurrentBox(null);
@@ -321,7 +322,7 @@ function AnnotationToolContent() {
       setCurrentBox(null);
       drawCanvas();
     }
-    
+
     setIsDrawing(false);
     setStartPos(null);
   };
@@ -330,15 +331,15 @@ function AnnotationToolContent() {
     const canvas = canvasRef.current;
     const img = imageRef.current;
     if (!canvas || !img || !img.complete || img.naturalWidth === 0) return;
-    
+
     const ctx = canvas.getContext('2d');
-    
+
     try {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      
+
       // Draw image
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      
+
       // Draw existing boxes
       boxes.forEach((box, index) => {
         const classIndex = box.class_id % 10;
@@ -346,7 +347,7 @@ function AnnotationToolContent() {
         ctx.strokeStyle = `hsl(${hue}, 100%, 50%)`;
         ctx.lineWidth = 2;
         ctx.strokeRect(box.x, box.y, box.width, box.height);
-        
+
         // Draw label
         ctx.fillStyle = `hsl(${hue}, 100%, 50%)`;
         const labelText = box.class_name;
@@ -356,7 +357,7 @@ function AnnotationToolContent() {
         ctx.font = '14px Arial';
         ctx.fillText(labelText, box.x + 5, box.y - 5);
       });
-      
+
       // Draw current box being drawn
       if (currentBox && isDrawing) {
         ctx.strokeStyle = '#a78bfa';
@@ -388,25 +389,25 @@ function AnnotationToolContent() {
       alert("No image or dataset loaded");
       return;
     }
-    
+
     if (boxes.length === 0) {
       alert("Please add at least one annotation before saving");
       return;
     }
-    
+
     const img = images[currentImageIndex];
     const canvas = canvasRef.current;
-    
+
     if (!canvas) {
       alert("Canvas not ready");
       return;
     }
-    
+
     // Ensure we use the image's natural dimensions (canvas should match, but use image as source of truth)
     const imgElement = imageRef.current;
     const imageWidth = imgElement?.naturalWidth || canvas.width;
     const imageHeight = imgElement?.naturalHeight || canvas.height;
-    
+
     try {
       const response = await fetch("http://localhost:8000/api/annotations/annotations/save", {
         method: "POST",
@@ -421,14 +422,14 @@ function AnnotationToolContent() {
           split: selectedSplit  // Include split if already selected
         })
       });
-      
+
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.detail || "Failed to save annotations");
       }
-      
+
       const data = await response.json();
-      
+
       if (data.success) {
         // If split not selected, show dialog; otherwise move to next
         if (!selectedSplit) {
@@ -445,10 +446,10 @@ function AnnotationToolContent() {
 
   const handleSplitSelection = async (split) => {
     if (!images[currentImageIndex]) return;
-    
+
     const img = images[currentImageIndex];
     setSelectedSplit(split);
-    
+
     try {
       // Update split on backend
       const response = await fetch(
@@ -459,17 +460,17 @@ function AnnotationToolContent() {
           body: JSON.stringify({ split })
         }
       );
-      
+
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.detail || "Failed to update split");
       }
-      
+
       // Update local state
       const updatedImages = [...images];
       updatedImages[currentImageIndex].split = split;
       setImages(updatedImages);
-      
+
       // Close dialog and move to next image
       setShowSplitDialog(false);
       handleNextImage();
@@ -507,7 +508,7 @@ function AnnotationToolContent() {
       <div className="min-h-screen bg-black text-foreground flex items-center justify-center">
         <div className="text-center">
           <p className="text-muted-foreground mb-4">Error: Dataset has no classes defined</p>
-          <Button onClick={() => router.push('/')}>
+          <Button onClick={() => router.push('/dashboard')} className="bg-primary hover:bg-primary/90">
             <FiHome className="mr-2" />
             Return to Dashboard
           </Button>
@@ -521,29 +522,43 @@ function AnnotationToolContent() {
   return (
     <div className="min-h-screen bg-black text-foreground">
       {/* Header */}
-      <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-50">
+      <header className="border-b border-border bg-card sticky top-0 z-50">
         <div className="container mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <Button variant="outline" size="sm" onClick={() => router.push('/')}>
+              <Button
+                onClick={() => router.push('/dashboard')}
+                className="bg-primary hover:bg-primary/90 text-primary-foreground"
+                size="sm"
+              >
                 <FiHome className="mr-2" />
                 Dashboard
               </Button>
-              <div>
-                <h1 className="text-xl font-bold text-primary">{dataset.name}</h1>
-                <p className="text-xs text-muted-foreground">
-                  Image {currentImageIndex + 1} of {images.length}
-                  {selectedSplit && (
-                    <span className="ml-2">
-                      • Split: <span className="font-semibold capitalize">{selectedSplit}</span>
-                    </span>
-                  )}
-                </p>
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-px bg-border"></div>
+                <div>
+                  <h1 className="text-xl font-bold">{dataset.name}</h1>
+                  <p className="text-xs text-muted-foreground">
+                    Image {currentImageIndex + 1} of {images.length}
+                    {selectedSplit && (
+                      <span className="ml-2">
+                        • <span className="capitalize">{selectedSplit}</span>
+                      </span>
+                    )}
+                  </p>
+                </div>
               </div>
             </div>
-            <Badge className="bg-primary text-primary-foreground">
-              {boxes.length} annotations
-            </Badge>
+            <div className="flex items-center gap-3">
+              {stats && (
+                <Badge variant="outline" className="border-border">
+                  {stats.annotated_images || 0} / {stats.total_images || 0} annotated
+                </Badge>
+              )}
+              <Badge>
+                {boxes.length} {boxes.length === 1 ? 'annotation' : 'annotations'}
+              </Badge>
+            </div>
           </div>
         </div>
       </header>
@@ -570,17 +585,17 @@ function AnnotationToolContent() {
                           // This is critical - these dimensions are used for coordinate calculations
                           canvas.width = img.naturalWidth;
                           canvas.height = img.naturalHeight;
-                          
+
                           // Set display size to maintain aspect ratio
                           // The canvas will be scaled by CSS but internal dimensions stay at natural size
                           canvas.style.width = '100%';
                           canvas.style.height = 'auto';
                           canvas.style.maxHeight = '70vh';
                           canvas.style.display = 'block';
-                          
+
                           // Force a reflow to ensure dimensions are set
                           canvas.offsetHeight;
-                          
+
                           // Small delay to ensure everything is rendered
                           setTimeout(() => drawCanvas(), 100);
                         }
@@ -618,8 +633,8 @@ function AnnotationToolContent() {
                         }
                       }}
                       className="w-full border border-border rounded-lg cursor-crosshair bg-black"
-                      style={{ 
-                        maxHeight: '70vh', 
+                      style={{
+                        maxHeight: '70vh',
                         height: 'auto',
                         display: 'block',
                         boxSizing: 'border-box'
@@ -629,7 +644,7 @@ function AnnotationToolContent() {
                 ) : (
                   <div className="flex flex-col items-center justify-center py-24 text-muted-foreground">
                     <p>No images in dataset</p>
-                    <Button 
+                    <Button
                       onClick={() => fileInputRef.current?.click()}
                       className="mt-4 bg-primary"
                     >
@@ -772,7 +787,7 @@ function AnnotationToolContent() {
                 <FiSave className="mr-2" />
                 Save & Next
               </Button>
-              
+
               {/* Export Button - Always visible */}
               <Button
                 onClick={async () => {
@@ -780,16 +795,16 @@ function AnnotationToolContent() {
                     alert("Error: Dataset ID not found");
                     return;
                   }
-                  
+
                   // Refresh stats first
                   await fetchStats();
-                  
+
                   if (stats && stats.annotated_images !== stats.total_images) {
                     if (!confirm(`Not all images are annotated!\n\nAnnotated: ${stats.annotated_images || 0} / ${stats.total_images || 0}\n\nExport anyway? (Only annotated images will be exported)`)) {
                       return;
                     }
                   }
-                  
+
                   try {
                     const response = await fetch(`http://localhost:8000/api/annotations/datasets/${datasetId}/export`, {
                       method: "POST"
@@ -813,9 +828,9 @@ function AnnotationToolContent() {
                 <FiDownload className="mr-2" />
                 Export Dataset
               </Button>
-              <Button 
+              <Button
                 onClick={() => fileInputMoreRef.current?.click()}
-                variant="outline" 
+                variant="outline"
                 className="w-full border-border"
               >
                 <FiUpload className="mr-2" />

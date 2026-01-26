@@ -37,28 +37,20 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-black via-background to-black flex items-center justify-center p-4">
-      {/* Animated background */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl animate-pulse" />
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl animate-pulse delay-1000" />
-      </div>
-
-      <div className="relative z-10 w-full max-w-md">
+    <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary via-primary/80 to-primary/60 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-primary/20">
-            <FiZap className="text-3xl text-primary-foreground" />
-          </div>
-          <h1 className="text-3xl font-bold text-foreground mb-2">Welcome Back</h1>
-          <p className="text-muted-foreground">Sign in to your YOLO Generator account</p>
+          <FiZap className="text-4xl text-primary mx-auto mb-4" />
+          <h1 className="text-2xl font-bold">Welcome Back</h1>
+          <p className="text-muted-foreground text-sm">Sign in to your account</p>
         </div>
 
         {/* Login Card */}
-        <Card className="bg-card/60 backdrop-blur-xl border-border/50">
-          <CardHeader className="space-y-1">
-            <CardTitle className="text-2xl text-center">Login</CardTitle>
-            <CardDescription className="text-center">
+        <Card className="border-border">
+          <CardHeader>
+            <CardTitle className="text-xl">Login</CardTitle>
+            <CardDescription>
               Enter your credentials to access your account
             </CardDescription>
           </CardHeader>
@@ -72,97 +64,72 @@ export default function LoginPage() {
               )}
 
               <div className="space-y-2">
-                <Label htmlFor="username" className="flex items-center gap-2">
-                  <FiUser className="text-muted-foreground" />
-                  Username
-                </Label>
+                <Label htmlFor="username">Username</Label>
                 <Input
                   id="username"
                   type="text"
-                  placeholder="Enter your username"
+                  placeholder="Username"
                   value={formData.username}
                   onChange={(e) => setFormData({ ...formData, username: e.target.value })}
                   required
-                  className="bg-background/50"
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="password" className="flex items-center gap-2">
-                  <FiLock className="text-muted-foreground" />
-                  Password
-                </Label>
+                <Label htmlFor="password">Password</Label>
                 <Input
                   id="password"
                   type="password"
-                  placeholder="Enter your password"
+                  placeholder="Password"
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                   required
-                  className="bg-background/50"
                 />
               </div>
 
               <Button
                 type="submit"
-                className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
+                className="w-full"
                 disabled={loading}
               >
-                {loading ? (
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin" />
-                    Signing in...
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <FiLogIn />
-                    Sign In
-                  </div>
-                )}
+                {loading ? "Signing in..." : "Sign In"}
               </Button>
             </form>
 
             <div className="mt-6 text-center">
-              <p className="text-sm text-muted-foreground">
-                Don't have an account?{" "}
-                <button
-                  onClick={() => router.push("/register")}
-                  className="text-primary hover:underline font-medium"
-                >
-                  Create one
-                </button>
+              <p className="mt-2 text-center text-sm text-gray-600">
+                Don&apos;t have an account?{' '}
+                <a href="/register" className="font-medium text-indigo-600 hover:text-indigo-500">
+                  Register
+                </a>
               </p>
             </div>
 
             {/* Demo credentials */}
-            <div className="mt-6 p-4 rounded-lg bg-muted/30 border border-border/50">
-              <p className="text-xs font-semibold text-muted-foreground mb-2">Demo Accounts:</p>
-              <div className="space-y-1 text-xs text-muted-foreground">
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline" className="text-xs">Admin</Badge>
-                  <span>admin / admin123</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline" className="text-xs">User</Badge>
-                  <span>user / user123</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline" className="text-xs">Viewer</Badge>
-                  <span>viewer / viewer123</span>
-                </div>
+            <div className="mt-8 pt-6 border-t border-border">
+              <p className="text-xs font-semibold text-muted-foreground mb-3 uppercase tracking-wider">Demo Accounts</p>
+              <div className="grid grid-cols-1 gap-2">
+                {['Admin', 'User', 'Viewer'].map((role) => (
+                  <div key={role} className="flex items-center justify-between text-xs p-2 rounded bg-muted/50">
+                    <span className="font-medium">{role}</span>
+                    <span className="text-muted-foreground font-mono">{role.toLowerCase()} / {role.toLowerCase()}123</span>
+                  </div>
+                ))}
               </div>
             </div>
           </CardContent>
         </Card>
 
         {/* Back to home */}
-        <div className="text-center mt-4">
-          <button
+        <div className="text-center mt-6">
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => router.push("/home")}
-            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            className="text-muted-foreground"
           >
             ← Back to home
-          </button>
+          </Button>
         </div>
       </div>
     </div>

@@ -16,14 +16,14 @@ export default function UnauthorizedPage() {
             <FiAlertTriangle className="text-4xl text-destructive" />
           </div>
           <CardTitle className="text-2xl">Access Denied</CardTitle>
-          <CardDescription className="text-base">
-            You don't have permission to access this resource
-          </CardDescription>
+          <p className="mt-2 text-center text-sm text-gray-600">
+            You don&apos;t have permission to access this page.
+          </p>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="p-4 rounded-lg bg-muted/30 border border-border/50">
             <p className="text-sm text-muted-foreground">
-              This page or action requires special permissions that your current role doesn't have. 
+              This page or action requires special permissions that your current role doesn't have.
               Please contact an administrator if you believe this is an error.
             </p>
           </div>
@@ -41,13 +41,14 @@ export default function UnauthorizedPage() {
               onClick={() => router.push("/dashboard")}
               className="flex-1 bg-primary hover:bg-primary/90"
             >
-              <FiHome className="mr-2" />
-              Dashboard
+              Go back home
             </Button>
           </div>
+          <p className="mt-2 text-xs text-center text-gray-500">
+            If you think this is a mistake, please contact support.
+          </p>
         </CardContent>
       </Card>
     </div>
   );
 }
-

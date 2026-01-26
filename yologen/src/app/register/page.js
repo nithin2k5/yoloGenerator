@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { FiZap, FiUser, FiLock, FiMail, FiAlertCircle, FiUserPlus, FiShield } from "react-icons/fi";
+import { FiZap, FiAlertCircle } from "react-icons/fi";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -27,7 +27,6 @@ export default function RegisterPage() {
     e.preventDefault();
     setError("");
 
-    // Validation
     if (formData.password !== formData.confirmPassword) {
       setError("Passwords do not match");
       return;
@@ -57,28 +56,20 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-black via-background to-black flex items-center justify-center p-4">
-      {/* Animated background */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl animate-pulse" />
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl animate-pulse delay-1000" />
-      </div>
-
-      <div className="relative z-10 w-full max-w-md">
+    <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary via-primary/80 to-primary/60 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-primary/20">
-            <FiZap className="text-3xl text-primary-foreground" />
-          </div>
-          <h1 className="text-3xl font-bold text-foreground mb-2">Create Account</h1>
-          <p className="text-muted-foreground">Join YOLO Generator today</p>
+          <FiZap className="text-4xl text-primary mx-auto mb-4" />
+          <h1 className="text-2xl font-bold">Create Account</h1>
+          <p className="text-muted-foreground text-sm">Join YOLO Generator today</p>
         </div>
 
         {/* Register Card */}
-        <Card className="bg-card/60 backdrop-blur-xl border-border/50">
-          <CardHeader className="space-y-1">
-            <CardTitle className="text-2xl text-center">Register</CardTitle>
-            <CardDescription className="text-center">
+        <Card className="border-border">
+          <CardHeader>
+            <CardTitle className="text-xl">Register</CardTitle>
+            <CardDescription>
               Create your account to get started
             </CardDescription>
           </CardHeader>
@@ -92,77 +83,59 @@ export default function RegisterPage() {
               )}
 
               <div className="space-y-2">
-                <Label htmlFor="username" className="flex items-center gap-2">
-                  <FiUser className="text-muted-foreground" />
-                  Username
-                </Label>
+                <Label htmlFor="username">Username</Label>
                 <Input
                   id="username"
                   type="text"
-                  placeholder="Choose a username"
+                  placeholder="Username"
                   value={formData.username}
                   onChange={(e) => setFormData({ ...formData, username: e.target.value })}
                   required
-                  className="bg-background/50"
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="email" className="flex items-center gap-2">
-                  <FiMail className="text-muted-foreground" />
-                  Email
-                </Label>
+                <Label htmlFor="email">Email</Label>
                 <Input
                   id="email"
                   type="email"
-                  placeholder="Enter your email"
+                  placeholder="Email"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   required
-                  className="bg-background/50"
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="password" className="flex items-center gap-2">
-                  <FiLock className="text-muted-foreground" />
-                  Password
-                </Label>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="Create a password (min 6 chars)"
-                  value={formData.password}
-                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  required
-                  minLength={6}
-                  className="bg-background/50"
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="password">Password</Label>
+                  <Input
+                    id="password"
+                    type="password"
+                    placeholder="Password"
+                    value={formData.password}
+                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    required
+                    minLength={6}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="confirmPassword">Confirm</Label>
+                  <Input
+                    id="confirmPassword"
+                    type="password"
+                    placeholder="Confirm"
+                    value={formData.confirmPassword}
+                    onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                    required
+                  />
+                </div>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="confirmPassword" className="flex items-center gap-2">
-                  <FiLock className="text-muted-foreground" />
-                  Confirm Password
-                </Label>
-                <Input
-                  id="confirmPassword"
-                  type="password"
-                  placeholder="Confirm your password"
-                  value={formData.confirmPassword}
-                  onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                  required
-                  className="bg-background/50"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="role" className="flex items-center gap-2">
-                  <FiShield className="text-muted-foreground" />
-                  Role
-                </Label>
+                <Label htmlFor="role">Role</Label>
                 <Select value={formData.role} onValueChange={(value) => setFormData({ ...formData, role: value })}>
-                  <SelectTrigger className="bg-background/50">
+                  <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -170,27 +143,14 @@ export default function RegisterPage() {
                     <SelectItem value="viewer">Viewer (Read Only)</SelectItem>
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-muted-foreground">
-                  Choose your account type
-                </p>
               </div>
 
               <Button
                 type="submit"
-                className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
+                className="w-full"
                 disabled={loading}
               >
-                {loading ? (
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin" />
-                    Creating account...
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <FiUserPlus />
-                    Create Account
-                  </div>
-                )}
+                {loading ? "Creating account..." : "Create Account"}
               </Button>
             </form>
 
@@ -199,7 +159,7 @@ export default function RegisterPage() {
                 Already have an account?{" "}
                 <button
                   onClick={() => router.push("/login")}
-                  className="text-primary hover:underline font-medium"
+                  className="text-primary hover:underline"
                 >
                   Sign in
                 </button>
@@ -209,13 +169,15 @@ export default function RegisterPage() {
         </Card>
 
         {/* Back to home */}
-        <div className="text-center mt-4">
-          <button
+        <div className="text-center mt-6">
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => router.push("/home")}
-            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            className="text-muted-foreground"
           >
             ← Back to home
-          </button>
+          </Button>
         </div>
       </div>
     </div>

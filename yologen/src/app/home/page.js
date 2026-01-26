@@ -1,12 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { FiZap, FiArrowRight, FiCheckCircle, FiDatabase, FiCpu, FiImage, FiActivity, FiLayers, FiLogOut } from "react-icons/fi";
+import { Card, CardContent } from "@/components/ui/card";
+import { FiZap, FiArrowRight, FiDatabase, FiCpu, FiImage, FiActivity, FiLogOut, FiCheckCircle, FiBox, FiLayers } from "react-icons/fi";
 
 export default function HomePage() {
   const router = useRouter();
@@ -16,284 +15,258 @@ export default function HomePage() {
     {
       icon: FiDatabase,
       title: "Dataset Management",
-      description: "Create, upload, and manage custom datasets with ease",
-      color: "from-blue-500/20 to-blue-600/10"
+      description: "Organize, version, and collaborate on your computer vision datasets efficiently."
     },
     {
       icon: FiImage,
       title: "Smart Annotation",
-      description: "Precise bounding box annotations with real-time preview",
-      color: "from-purple-500/20 to-purple-600/10"
+      description: "Accelerate labeling with AI-assisted tools and intuitive interfaces."
     },
     {
       icon: FiCpu,
       title: "Model Training",
-      description: "Train custom YOLO models with 30+ pre-trained options",
-      color: "from-green-500/20 to-green-600/10"
+      description: "Train custom YOLO models on optimized cloud infrastructure with one click."
     },
     {
-      icon: FiZap,
-      title: "Fast Inference",
-      description: "Real-time object detection with industry-leading speed",
-      color: "from-amber-500/20 to-amber-600/10"
+      icon: FiActivity,
+      title: "Real-time Inference",
+      description: "Deploy and test your models instantly with our low-latency inference API."
     }
   ];
 
-  const stats = [
-    { label: "YOLO Models", value: "30+", icon: FiLayers },
-    { label: "Supported Formats", value: "YAML", icon: FiDatabase },
-    { label: "Real-time", value: "Detection", icon: FiActivity },
-    { label: "Custom", value: "Training", icon: FiCpu }
-  ];
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-black via-background to-black relative overflow-hidden">
-      {/* Animated background elements */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl animate-pulse" />
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl animate-pulse delay-1000" />
-      </div>
+    <div className="min-h-screen bg-background text-foreground flex flex-col font-sans">
+      {/* Header */}
+      <header className="border-b border-border/40 bg-background/80 backdrop-blur-md sticky top-0 z-50">
+        <div className="container mx-auto px-6 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity" onClick={() => router.push("/")}>
+            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
+              <FiZap className="text-primary-foreground text-lg" />
+            </div>
+            <span className="text-lg font-semibold tracking-tight">YOLO Gen</span>
+          </div>
 
-      <div className="relative z-10">
-        {/* Header */}
-        <header className="border-b border-border/50 bg-card/20 backdrop-blur-xl">
-          <div className="container mx-auto px-6 py-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary via-primary/80 to-primary/60 flex items-center justify-center shadow-lg shadow-primary/20">
-                  <FiZap className="text-2xl text-primary-foreground" />
+          <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-muted-foreground">
+            <a href="#features" className="hover:text-foreground transition-colors">Features</a>
+            <a href="#workflow" className="hover:text-foreground transition-colors">How it Works</a>
+            <a href="#" className="hover:text-foreground transition-colors">Pricing</a>
+          </nav>
+
+          <div className="flex items-center gap-4">
+            {user ? (
+              <>
+                <Badge variant="outline" className="hidden sm:flex border-border/50 font-normal">
+                  {user.username}
+                </Badge>
+                <Button onClick={() => router.push("/dashboard")} size="sm">
+                  Dashboard
+                </Button>
+                <Button onClick={logout} variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
+                  <FiLogOut className="mr-2 h-4 w-4" /> Logout
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button onClick={() => router.push("/login")} variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
+                  Login
+                </Button>
+                <Button onClick={() => router.push("/register")} size="sm">
+                  Get Started
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
+      </header>
+
+      <main className="flex-1">
+        {/* Hero Section */}
+        <section className="py-24 md:py-32 px-6 border-b border-border/40 bg-muted/10">
+          <div className="container mx-auto max-w-6xl">
+            <div className="flex flex-col lg:flex-row items-center gap-16">
+              <div className="flex-1 space-y-8 text-center lg:text-left">
+                <Badge variant="secondary" className="rounded-full px-4 py-1 text-sm font-medium bg-primary/10 text-primary hover:bg-primary/20 border-primary/20">
+                  v2.0 is now live
+                </Badge>
+
+                <h1 className="text-5xl md:text-7xl font-bold tracking-tight leading-[1.1]">
+                  Train Custom <br className="hidden lg:block" />
+                  <span className="text-primary">Vision Models</span>
+                </h1>
+
+                <p className="text-xl text-muted-foreground leading-relaxed max-w-2xl mx-auto lg:mx-0">
+                  The all-in-one platform to create, train, and deploy YOLO models. Streamline your workflow from raw data to API.
+                </p>
+
+                <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4">
+                  <Button
+                    onClick={() => router.push(user ? '/dashboard' : '/register')}
+                    size="lg"
+                    className="h-12 px-8 text-base rounded-md w-full sm:w-auto shadow-md"
+                  >
+                    Start Building Free
+                    <FiArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="lg"
+                    className="h-12 px-8 text-base rounded-md w-full sm:w-auto bg-background"
+                  >
+                    View Documentation
+                  </Button>
                 </div>
-                <div>
-                  <h1 className="text-xl font-bold text-foreground">YOLO Generator</h1>
-                  <p className="text-xs text-muted-foreground">AI-Powered Object Detection</p>
+
+                <div className="pt-8 flex items-center justify-center lg:justify-start gap-8 text-muted-foreground text-sm">
+                  <div className="flex items-center gap-2">
+                    <FiCheckCircle className="text-primary" />
+                    <span>No credit card required</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <FiCheckCircle className="text-primary" />
+                    <span>Free tier available</span>
+                  </div>
                 </div>
               </div>
-              
-              <div className="flex flex-col sm:flex-row items-end sm:items-center gap-3">
-                {user ? (
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="border-primary/40 bg-primary/10 text-primary px-3 py-1.5">
-                      {user.username}
-                    </Badge>
-                    <Badge variant="outline" className="capitalize px-2 py-1">
-                      {user.role}
-                    </Badge>
-                    <Button
-                      onClick={logout}
-                      variant="outline"
-                      size="sm"
-                      className="ml-2"
-                    >
-                      <FiLogOut className="mr-1" />
-                      Logout
-                    </Button>
+
+              <div className="flex-1 w-full max-w-[600px] lg:max-w-none">
+                <div className="relative rounded-xl overflow-hidden border border-border bg-card shadow-2xl">
+                  {/* Simple Preview UI */}
+                  <div className="h-10 bg-muted border-b border-border flex items-center px-4 gap-2">
+                    <div className="w-3 h-3 rounded-full bg-red-400/80"></div>
+                    <div className="w-3 h-3 rounded-full bg-yellow-400/80"></div>
+                    <div className="w-3 h-3 rounded-full bg-green-400/80"></div>
                   </div>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <Button
-                      onClick={() => router.push("/login")}
-                      variant="outline"
-                      size="sm"
-                    >
-                      Login
-                    </Button>
-                    <Button
-                      onClick={() => router.push("/register")}
-                      size="sm"
-                      className="bg-primary hover:bg-primary/90"
-                    >
-                      Sign Up
-                    </Button>
+                  <div className="aspect-[4/3] bg-muted/30 flex items-center justify-center relative group">
+                    <img
+                      src="/dashboard_preview.svg"
+                      alt="Platform Interface"
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.target.style.display = 'none';
+                        e.target.nextSibling.style.display = 'flex';
+                      }}
+                    />
+                    <div className="hidden absolute inset-0 flex-col items-center justify-center text-muted-foreground">
+                      <FiLayers className="text-6xl mb-4 opacity-20" />
+                      <span className="text-sm font-medium opacity-50">Dashboard Preview</span>
+                    </div>
                   </div>
-                )}
+                </div>
               </div>
             </div>
           </div>
-        </header>
+        </section>
 
-        {/* Hero Section */}
-        <section className="container mx-auto px-6 py-20">
-          <div className="max-w-4xl mx-auto text-center space-y-8">
-            {/* Badge */}
-            <Badge className="bg-primary/10 text-primary border-primary/30 px-4 py-2 text-sm">
-              <FiZap className="mr-2" />
-              Professional ML Training Platform
-            </Badge>
-
-            {/* Main Heading */}
-            <div className="space-y-4">
-              <h1 className="text-6xl md:text-7xl font-bold text-foreground tracking-tight">
-                Build Custom
-                <span className="block mt-2 bg-gradient-to-r from-primary via-foreground to-primary bg-clip-text text-transparent">
-                  YOLO Models
-                </span>
-              </h1>
-              <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-                Create, train, and deploy state-of-the-art object detection models with our intuitive platform. No coding required.
+        {/* Features Grid */}
+        <section id="features" className="py-24 px-6">
+          <div className="container mx-auto max-w-6xl">
+            <div className="text-center mb-16 max-w-3xl mx-auto space-y-4">
+              <h2 className="text-3xl font-bold tracking-tight">Everything you need to ship</h2>
+              <p className="text-muted-foreground text-lg">
+                Stop stitching together disparate tools. Get a complete pipeline integrated into a single workflow.
               </p>
             </div>
 
-            {/* CTA Buttons */}
-            <div className="flex items-center justify-center gap-4 pt-4">
-              {user ? (
-                <Button
-                  onClick={() => router.push('/dashboard')}
-                  size="lg"
-                  className="bg-primary hover:bg-primary/90 text-primary-foreground px-8 py-6 text-lg font-semibold shadow-lg shadow-primary/30 group"
-                >
-                  Go to Dashboard
-                  <FiArrowRight className="ml-2 group-hover:translate-x-1 transition-transform" />
-                </Button>
-              ) : (
-                <>
-                  <Button
-                    onClick={() => router.push('/register')}
-                    size="lg"
-                    className="bg-primary hover:bg-primary/90 text-primary-foreground px-8 py-6 text-lg font-semibold shadow-lg shadow-primary/30 group"
-                  >
-                    Get Started
-                    <FiArrowRight className="ml-2 group-hover:translate-x-1 transition-transform" />
-                  </Button>
-                  <Button
-                    onClick={() => router.push('/login')}
-                    size="lg"
-                    variant="outline"
-                    className="border-border hover:bg-card px-8 py-6 text-lg"
-                  >
-                    Sign In
-                  </Button>
-                </>
-              )}
-            </div>
-
-            {/* Quick Stats */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-12">
-              {stats.map((stat, index) => {
-                const Icon = stat.icon;
+            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
+              {features.map((feature, index) => {
+                const Icon = feature.icon;
                 return (
-                  <div key={index} className="p-4 rounded-2xl bg-card/40 border border-border/50 backdrop-blur-sm">
-                    <Icon className="text-2xl text-primary mb-2 mx-auto" />
-                    <p className="text-2xl font-bold text-foreground">{stat.value}</p>
-                    <p className="text-xs text-muted-foreground mt-1">{stat.label}</p>
-                  </div>
+                  <Card key={index} className="bg-card border-border/50 hover:shadow-lg transition-all duration-200">
+                    <CardContent className="p-6">
+                      <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center mb-4 text-primary">
+                        <Icon className="text-2xl" />
+                      </div>
+                      <h3 className="text-lg font-semibold mb-2">{feature.title}</h3>
+                      <p className="text-muted-foreground text-sm leading-relaxed">{feature.description}</p>
+                    </CardContent>
+                  </Card>
                 );
               })}
             </div>
           </div>
         </section>
 
-        {/* Features Section */}
-        <section className="container mx-auto px-6 py-20">
-          <div className="text-center mb-12">
-            <h2 className="text-4xl font-bold text-foreground mb-4">Everything You Need</h2>
-            <p className="text-muted-foreground text-lg">
-              Complete toolset for building production-ready object detection models
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl mx-auto">
-            {features.map((feature, index) => {
-              const Icon = feature.icon;
-              return (
-                <Card 
-                  key={index} 
-                  className="bg-card/40 border-border/50 backdrop-blur-sm hover:border-primary/50 transition-all duration-300 group cursor-pointer"
-                >
-                  <CardHeader>
-                    <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${feature.color} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}>
-                      <Icon className="text-2xl text-foreground" />
-                    </div>
-                    <CardTitle className="text-lg">{feature.title}</CardTitle>
-                    <CardDescription className="text-sm">
-                      {feature.description}
-                    </CardDescription>
-                  </CardHeader>
-                </Card>
-              );
-            })}
-          </div>
-        </section>
-
-        {/* Workflow Section */}
-        <section className="container mx-auto px-6 py-20">
-          <div className="max-w-5xl mx-auto">
-            <div className="text-center mb-12">
-              <h2 className="text-4xl font-bold text-foreground mb-4">Simple Workflow</h2>
-              <p className="text-muted-foreground text-lg">
-                From dataset to deployment in 4 easy steps
-              </p>
+        {/* Workflow Steps */}
+        <section id="workflow" className="py-24 px-6 bg-muted/30 border-t border-border/40">
+          <div className="container mx-auto max-w-4xl">
+            <div className="text-center mb-16">
+              <Badge variant="outline" className="mb-4 bg-background">Workflow</Badge>
+              <h2 className="text-3xl md:text-4xl font-bold tracking-tight">From Image to Inference</h2>
             </div>
 
-            <div className="grid md:grid-cols-4 gap-6">
+            <div className="space-y-12">
               {[
-                { num: "01", title: "Create Dataset", desc: "Upload and organize your images" },
-                { num: "02", title: "Annotate", desc: "Draw boxes around objects" },
-                { num: "03", title: "Train", desc: "Let AI learn from your data" },
-                { num: "04", title: "Deploy", desc: "Use your custom model" }
-              ].map((step, index) => (
-                <div key={index} className="text-center relative">
-                  <div className="w-16 h-16 rounded-full bg-primary/10 border-2 border-primary/30 flex items-center justify-center text-2xl font-bold text-primary mx-auto mb-4">
-                    {step.num}
+                {
+                  step: "01",
+                  title: "Upload & Organize",
+                  desc: "Drag and drop your raw images. We verify formats and check for duplicates automatically.",
+                  icon: FiBox
+                },
+                {
+                  step: "02",
+                  title: "Annotate with AI",
+                  desc: "Use our Smart Hulls and Magic Wand tools to label objects 10x faster than manual bounding boxes.",
+                  icon: FiImage
+                },
+                {
+                  step: "03",
+                  title: "One-Click Training",
+                  desc: "Select a base model (YOLOv8, v9, v10), configure epochs, and hit train. We handle the GPUs.",
+                  icon: FiCpu
+                },
+                {
+                  step: "04",
+                  title: "Deploy via API",
+                  desc: "Get a dedicated endpoint for your model. Send images and get JSON predictions in milliseconds.",
+                  icon: FiActivity
+                }
+              ].map((item, i) => (
+                <div key={i} className="flex flex-col md:flex-row gap-8 items-start md:items-center p-6 rounded-xl bg-background border border-border/50 shadow-sm">
+                  <div className="flex-shrink-0 w-16 h-16 rounded-xl bg-primary/5 flex items-center justify-center text-xl font-bold text-primary border border-primary/10">
+                    {item.step}
                   </div>
-                  <h3 className="font-semibold text-foreground mb-2">{step.title}</h3>
-                  <p className="text-sm text-muted-foreground">{step.desc}</p>
-                  
-                  {index < 3 && (
-                    <FiArrowRight className="hidden md:block absolute top-8 -right-8 text-muted-foreground" />
-                  )}
+                  <div className="flex-1">
+                    <h3 className="text-xl font-bold mb-2">{item.title}</h3>
+                    <p className="text-muted-foreground leading-relaxed">
+                      {item.desc}
+                    </p>
+                  </div>
                 </div>
               ))}
             </div>
           </div>
         </section>
 
-        {/* CTA Section */}
-        <section className="container mx-auto px-6 py-20">
-          <Card className="max-w-4xl mx-auto bg-gradient-to-r from-card/80 to-card/60 border-border/50 backdrop-blur-xl">
-            <CardContent className="p-12 text-center">
-              <FiCheckCircle className="text-5xl text-primary mx-auto mb-6" />
-              <h2 className="text-3xl font-bold text-foreground mb-4">
-                Ready to Build Your AI?
-              </h2>
-              <p className="text-muted-foreground text-lg mb-8 max-w-2xl mx-auto">
-                Join developers and teams building custom object detection models with YOLO Generator.
-              </p>
-              <Button
-                onClick={() => router.push('/dashboard')}
-                size="lg"
-                className="bg-primary hover:bg-primary/90 text-primary-foreground px-12 py-6 text-lg font-semibold shadow-lg shadow-primary/30"
-              >
-                Launch Platform
-                <FiArrowRight className="ml-2" />
-              </Button>
-            </CardContent>
-          </Card>
-        </section>
-
-        {/* Footer */}
-        <footer className="border-t border-border/50 bg-card/20 backdrop-blur-xl mt-20">
-          <div className="container mx-auto px-6 py-8">
-            <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center">
-                  <FiZap className="text-primary" />
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-foreground">YOLO Generator</p>
-                  <p className="text-xs text-muted-foreground">Professional ML Platform</p>
-                </div>
-              </div>
-              
-              <div className="flex gap-2">
-                <Badge variant="outline" className="text-xs">v1.0.0</Badge>
-                <Badge variant="outline" className="text-xs">YOLOv5-11</Badge>
-                <Badge variant="outline" className="text-xs">Production Ready</Badge>
-              </div>
-            </div>
+        {/* CTA */}
+        <section className="py-24 px-6 border-t border-border/40">
+          <div className="container mx-auto max-w-4xl text-center bg-primary text-primary-foreground rounded-3xl p-12 shadow-xl">
+            <h2 className="text-3xl font-bold mb-6">Ready to build your model?</h2>
+            <p className="text-primary-foreground/80 text-lg mb-8 max-w-xl mx-auto">
+              Join thousands of developers building the future of computer vision today.
+            </p>
+            <Button
+              onClick={() => router.push(user ? '/dashboard' : '/register')}
+              size="lg"
+              className="h-12 px-10 text-lg bg-background text-foreground hover:bg-background/90 font-semibold"
+            >
+              Get Started for Free
+            </Button>
           </div>
-        </footer>
-      </div>
+        </section>
+      </main>
+
+      {/* Footer */}
+      <footer className="border-t border-border/40 bg-muted/10 py-12 px-6">
+        <div className="container mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
+          <div className="flex items-center gap-2 opacity-80">
+            <FiZap className="text-primary" />
+            <span className="font-bold text-sm">YOLO Gen</span>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            &copy; {new Date().getFullYear()} YOLO Generator Inc. All rights reserved.
+          </p>
+        </div>
+      </footer>
     </div>
   );
 }
-
