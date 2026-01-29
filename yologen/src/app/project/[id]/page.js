@@ -16,14 +16,30 @@ import ProjectUpload from "@/components/project/ProjectUpload";
 import ProjectAnnotate from "@/components/project/ProjectAnnotate";
 import ProjectGenerate from "@/components/project/ProjectGenerate";
 import ProjectTrain from "@/components/project/ProjectTrain";
+import ProjectDeploy from "@/components/project/ProjectDeploy";
 
 export default function ProjectPage() {
     const params = useParams();
+    const searchParams = useSearchParams();
     const router = useRouter();
     const [dataset, setDataset] = useState(null);
     const [loading, setLoading] = useState(true);
     const [stats, setStats] = useState(null);
-    const [activeTab, setActiveTab] = useState("overview");
+    const [activeTab, setActiveTab] = useState(searchParams.get('tab') || "overview");
+
+    // Update URL when tab changes
+    const handleTabChange = (val) => {
+        setActiveTab(val);
+        router.push(`/project/${params.id}?tab=${val}`, { scroll: false });
+    };
+
+    // Update tab if URL changes (external navigation)
+    useEffect(() => {
+        const tab = searchParams.get('tab');
+        if (tab && tab !== activeTab) {
+            setActiveTab(tab);
+        }
+    }, [searchParams]);
 
     useEffect(() => {
         if (params.id) {
@@ -100,7 +116,7 @@ export default function ProjectPage() {
             </header>
 
             {/* Tabs Navigation similar to Roboflow */}
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
+            <Tabs value={activeTab} onValueChange={handleTabChange} className="flex-1 flex flex-col min-h-0">
                 <div className="border-b border-border bg-muted/5 px-6">
                     <TabsList className="h-12 bg-transparent p-0 gap-6">
                         <TabTrigger value="overview" icon={FiGrid}>Overview</TabTrigger>
@@ -135,11 +151,7 @@ export default function ProjectPage() {
                         </TabsContent>
 
                         <TabsContent value="deploy" className="mt-0 h-full">
-                            <div className="p-12 text-center text-muted-foreground">
-                                <FiCode className="mx-auto text-4xl mb-4 opacity-20" />
-                                <h3 className="text-lg font-medium">Deployment API</h3>
-                                <p>Train a model first to get your API endpoint.</p>
-                            </div>
+                            <ProjectDeploy dataset={dataset} />
                         </TabsContent>
                     </div>
                 </div>

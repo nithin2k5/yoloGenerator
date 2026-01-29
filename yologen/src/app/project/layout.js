@@ -1,14 +1,16 @@
 "use client";
 
 import { useAuth } from "@/context/AuthContext";
-import { useRouter } from "next/navigation";
+import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { useState, useEffect } from "react";
-import { FiDatabase, FiImage, FiSettings, FiBarChart2, FiCpu, FiLayers, FiCode, FiGrid } from "react-icons/fi";
+import { FiDatabase, FiImage, FiSettings, FiBarChart2, FiCpu, FiLayers, FiCode, FiGrid, FiHome } from "react-icons/fi";
 import { Toaster } from 'sonner';
 
 export default function ProjectLayout({ children }) {
     const { user, loading } = useAuth();
     const router = useRouter();
+    const params = useParams();
+    const searchParams = useSearchParams();
 
     useEffect(() => {
         if (!loading && !user) {
@@ -40,15 +42,21 @@ export default function ProjectLayout({ children }) {
                 </div>
 
                 <nav className="flex-1 py-6 px-2 md:px-4 space-y-1">
-                    <SidebarItem icon={FiBarChart2} label="Overview" href="/dashboard" />
-                    <div className="pt-4 pb-2 px-2 hidden md:block text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                        Project
-                    </div>
-                    {/* These links will interact with the page content via Tabs mostly, 
-                        but for now we'll structure them valid for the layout 
-                        (Note: The actual tab switching logic will be inside the page, 
-                        or we can use URL-based tabs. For this layout, we'll assume the children carry the context)
-                     */}
+                    <SidebarItem icon={FiHome} label="Dashboard" href="/dashboard" />
+
+                    {params.id && (
+                        <>
+                            <div className="pt-4 pb-2 px-2 hidden md:block text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                                Project
+                            </div>
+                            <SidebarItem icon={FiGrid} label="Overview" href={`/project/${params.id}?tab=overview`} active={searchParams.get('tab') === 'overview' || !searchParams.get('tab')} />
+                            <SidebarItem icon={FiUpload} label="Upload" href={`/project/${params.id}?tab=upload`} active={searchParams.get('tab') === 'upload'} />
+                            <SidebarItem icon={FiImage} label="Annotate" href={`/project/${params.id}?tab=annotate`} active={searchParams.get('tab') === 'annotate'} />
+                            <SidebarItem icon={FiLayers} label="Generate" href={`/project/${params.id}?tab=generate`} active={searchParams.get('tab') === 'generate'} />
+                            <SidebarItem icon={FiCpu} label="Train" href={`/project/${params.id}?tab=train`} active={searchParams.get('tab') === 'train'} />
+                            <SidebarItem icon={FiCode} label="Deploy" href={`/project/${params.id}?tab=deploy`} active={searchParams.get('tab') === 'deploy'} />
+                        </>
+                    )}
                 </nav>
 
                 <div className="p-4 border-t border-border/50">
@@ -78,8 +86,8 @@ function SidebarItem({ icon: Icon, label, href, active }) {
         <a
             href={href}
             className={`flex items-center gap-3 px-3 py-2 rounded-md transition-colors ${active
-                    ? "bg-primary/10 text-primary font-medium"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                ? "bg-primary/10 text-primary font-medium"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground"
                 }`}
         >
             <Icon className="text-xl md:text-lg" />

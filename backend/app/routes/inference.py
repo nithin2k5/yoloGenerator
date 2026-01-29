@@ -18,17 +18,41 @@ inference_model = None
 async def predict_image(
     file: UploadFile = File(...),
     confidence: Optional[float] = Form(0.25),
-    model_name: Optional[str] = Form("yolov8n.pt")
+    model_name: Optional[str] = Form("yolov8n.pt"),
+    job_id: Optional[str] = Form(None)
 ):
     """
-    Run inference on uploaded image
+    Run inference on uploaded image. 
+    If job_id is provided, loads trained weights from that job. 
+    Otherwise uses pretrained model_name.
     """
     global inference_model
     
     try:
-        # Initialize model if not already done
-        if inference_model is None:
-            inference_model = YOLOInference(model_name)
+        # Determine model path
+        model_path = model_name
+        
+        if job_id:
+            # Construct path to best.pt for this job
+            # Assuming runs/detect/job_{job_id}/weights/best.pt
+            # We need to find the absolute path relative to backend root
+            weights_path = Path("runs/detect") / f"job_{job_id}" / "weights" / "best.pt"
+            if not weights_path.exists():
+                raise HTTPException(status_code=404, detail=f"Trained model for job {job_id} not found at {weights_path}")
+            model_path = str(weights_path)
+            
+        # Initialize or update model
+        # For simplicity in this demo, we reload if the model path changes. 
+        # In prod, you'd want a cache of models or a worker pool.
+        if inference_model is None or inference_model.model.ckpt_path != model_path:
+             # Check if we need to reload. 
+             # YOLO wrapper doesn't expose ckpt_path easily, so we might just reload if job_id is passed
+             # or track current loaded model.
+             if job_id:
+                 inference_model = YOLOInference(model_path)
+             elif inference_model is None:
+                 inference_model = YOLOInference(model_path)
+
         
         # Save uploaded file temporarily
         temp_dir = Path(tempfile.gettempdir()) / "yolo_uploads"

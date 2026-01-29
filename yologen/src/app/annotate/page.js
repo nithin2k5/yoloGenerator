@@ -516,12 +516,18 @@ function AnnotationToolContent() {
           <div className="flex items-center justify-between h-full">
             <div className="flex items-center gap-4">
               <Button
-                onClick={() => router.push('/dashboard')}
+                onClick={() => {
+                  if (datasetId) {
+                    router.push(`/project/${datasetId}`);
+                  } else {
+                    router.push('/dashboard');
+                  }
+                }}
                 className="bg-primary hover:bg-primary/90 text-primary-foreground"
                 size="sm"
               >
-                <FiHome className="mr-2" />
-                Dashboard
+                <FiChevronLeft className="mr-2" />
+                {datasetId ? "Project" : "Dashboard"}
               </Button>
               <div className="flex items-center gap-3">
                 <div className="h-10 w-px bg-border"></div>

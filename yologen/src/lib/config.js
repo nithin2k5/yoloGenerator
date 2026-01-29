@@ -16,5 +16,8 @@ export const API_ENDPOINTS = {
         EXPORT_AND_TRAIN: `${API_BASE_URL}/api/training/export-and-train`,
         JOBS: `${API_BASE_URL}/api/training/jobs`,
         JOB: (id) => `${API_BASE_URL}/api/training/job/${id}`,
+    },
+    INFERENCE: {
+        PREDICT: `${API_BASE_URL}/api/inference/predict`,
     }
 };
