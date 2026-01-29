@@ -1,0 +1,155 @@
+"use client";
+
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { FiPlay, FiCpu, FiClock } from "react-icons/fi";
+import { API_ENDPOINTS } from "@/lib/config";
+import { toast } from 'sonner';
+
+export default function ProjectTrain({ dataset }) {
+    const [config, setConfig] = useState({
+        epochs: 50,
+        batch_size: 16,
+        img_size: 640,
+        model_name: "yolov8n.pt",
+        learning_rate: 0.01
+    });
+    const [training, setTraining] = useState(false);
+
+    const startTraining = async () => {
+        setTraining(true);
+        try {
+            const response = await fetch(API_ENDPOINTS.TRAINING.START_FROM_DATASET, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    dataset_id: dataset.id,
+                    config: config
+                })
+            });
+
+            const data = await response.json();
+            if (data.success) {
+                toast.success("Training started! Job ID: " + data.job_id);
+            } else {
+                toast.error("Failed to start training: " + data.detail);
+            }
+        } catch (e) {
+            toast.error("Error: " + e.message);
+        } finally {
+            setTraining(false);
+        }
+    };
+
+    return (
+        <div className="h-full flex flex-col gap-6">
+            <div className="flex justify-between items-center">
+                <div>
+                    <h2 className="text-xl font-semibold">Train Model</h2>
+                    <p className="text-muted-foreground text-sm">Train a YOLOv8 model on your dataset version.</p>
+                </div>
+            </div>
+
+            <div className="grid md:grid-cols-3 gap-6">
+                <div className="md:col-span-2 space-y-6">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Configuration</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <div className="grid md:grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label>Model Architecture</Label>
+                                    <Select
+                                        value={config.model_name}
+                                        onValueChange={v => setConfig({ ...config, model_name: v })}
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="yolov8n.pt">YOLOv8 Nano (Fastest)</SelectItem>
+                                            <SelectItem value="yolov8s.pt">YOLOv8 Small</SelectItem>
+                                            <SelectItem value="yolov8m.pt">YOLOv8 Medium</SelectItem>
+                                            <SelectItem value="yolov8l.pt">YOLOv8 Large (Most Accurate)</SelectItem>
+                                            <SelectItem value="yolov9c.pt">YOLOv9 Compact</SelectItem>
+                                            <SelectItem value="yolov9e.pt">YOLOv9 Extended</SelectItem>
+                                            <SelectItem value="yolov10n.pt">YOLOv10 Nano</SelectItem>
+                                            <SelectItem value="yolov10s.pt">YOLOv10 Small</SelectItem>
+                                            <SelectItem value="yolo11n.pt">YOLO11 Nano</SelectItem>
+                                            <SelectItem value="yolo11s.pt">YOLO11 Small</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Epochs</Label>
+                                    <Input
+                                        type="number"
+                                        value={config.epochs}
+                                        onChange={e => setConfig({ ...config, epochs: parseInt(e.target.value) })}
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Batch Size</Label>
+                                    <Input
+                                        type="number"
+                                        value={config.batch_size}
+                                        onChange={e => setConfig({ ...config, batch_size: parseInt(e.target.value) })}
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Image Size</Label>
+                                    <Select
+                                        value={config.img_size.toString()}
+                                        onValueChange={v => setConfig({ ...config, img_size: parseInt(v) })}
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="416">416</SelectItem>
+                                            <SelectItem value="640">640</SelectItem>
+                                            <SelectItem value="1024">1024</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+
+                <div className="space-y-6">
+                    <Card className="bg-muted/30">
+                        <CardContent className="p-6">
+                            <h3 className="font-semibold mb-4">Training Estimates</h3>
+                            <div className="space-y-3 text-sm">
+                                <div className="flex justify-between">
+                                    <span className="text-muted-foreground flex items-center gap-2">
+                                        <FiCpu /> GPU
+                                    </span>
+                                    <span>T4 (Free)</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-muted-foreground flex items-center gap-2">
+                                        <FiClock /> Time
+                                    </span>
+                                    <span>~{(config.epochs * 0.5).toFixed(1)} mins</span>
+                                </div>
+                            </div>
+
+                            <Button className="w-full mt-6" onClick={startTraining} disabled={training}>
+                                {training ? "Starting..." : "Start Training"}
+                                {!training && <FiPlay className="ml-2" />}
+                            </Button>
+                        </CardContent>
+                    </Card>
+                </div>
+            </div>
+        </div>
+    );
+}

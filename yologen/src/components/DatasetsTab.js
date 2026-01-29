@@ -221,12 +221,12 @@ export default function DatasetsTab() {
                   <div className="flex justify-end gap-2 pt-4">
                     <Button variant="ghost" onClick={() => {
                       setNewDataset(prev => ({ ...prev, step: 0 }));
-                      router.push(`/annotate?dataset=${newDataset.createdId}`);
+                      router.push(`/project/${newDataset.createdId}`);
                     }}>
                       Skip
                     </Button>
-                    <Button onClick={() => router.push(`/annotate?dataset=${newDataset.createdId}`)}>
-                      Continue to Annotate <FiArrowRight className="ml-2" />
+                    <Button onClick={() => router.push(`/project/${newDataset.createdId}`)}>
+                      Continue to Project <FiArrowRight className="ml-2" />
                     </Button>
                   </div>
                 </div>
@@ -290,10 +290,11 @@ export default function DatasetsTab() {
                   size="sm"
                   variant="outline"
                   className="text-xs"
-                  onClick={() => window.location.href = `/annotate?dataset=${dataset.id}`}
+                  onClick={() => router.push(`/project/${dataset.id}`)}
                 >
-                  <FiEdit className="mr-1.5" /> Annotate
+                  <FiEye className="mr-1.5" /> Open Project
                 </Button>
+                {/* 
                 <Button
                   size="sm"
                   variant="outline"
@@ -305,6 +306,7 @@ export default function DatasetsTab() {
                 >
                   <FiEye className="mr-1.5" /> Pipeline
                 </Button>
+                */}
               </div>
 
               <div className="pt-2 border-t border-border flex justify-between items-center">

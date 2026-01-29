@@ -1,4 +1,5 @@
 from fastapi import APIRouter, File, UploadFile, HTTPException, BackgroundTasks, Form
+from typing import Optional
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, validator
 from typing import Optional, Dict, Any
@@ -23,7 +24,7 @@ class TrainingConfig(BaseModel):
     epochs: int = Field(default=100, ge=1, le=1000, description="Number of training epochs (1-1000)")
     batch_size: int = Field(default=16, ge=1, le=128, description="Batch size (1-128)")
     img_size: int = Field(default=640, ge=320, le=1280, description="Image size (320-1280)")
-    model_name: str = Field(default="yolov8n.pt", description="Base model name")
+    model_name: str = Field(default="yolov8n.pt", description="Base model name (yolov8, yolov9, yolov10, yolo11)")
     learning_rate: Optional[float] = Field(default=None, ge=0.0001, le=1.0, description="Learning rate")
     patience: Optional[int] = Field(default=50, ge=1, le=200, description="Early stopping patience")
     device: Optional[str] = Field(default=None, description="Device (cpu, cuda, mps, or None for auto)")
@@ -52,13 +53,32 @@ class DatasetTrainingRequest(BaseModel):
 @router.post("/start")
 async def start_training(
     background_tasks: BackgroundTasks,
-    config: TrainingConfig,
-    dataset_yaml: UploadFile = File(...)
+    dataset_yaml: UploadFile = File(...),
+    epochs: int = Form(100),
+    batch_size: int = Form(16),
+    img_size: int = Form(640),
+    model_name: str = Form("yolov8n.pt"),
+    learning_rate: Optional[float] = Form(None),
+    patience: Optional[int] = Form(50),
+    device: Optional[str] = Form(None),
+    strict_epochs: bool = Form(False)
 ):
     """
     Start model training job
     """
     try:
+        # Create TrainingConfig from form data
+        config = TrainingConfig(
+            epochs=epochs,
+            batch_size=batch_size,
+            img_size=img_size,
+            model_name=model_name,
+            learning_rate=learning_rate,
+            patience=patience,
+            device=device,
+            strict_epochs=strict_epochs
+        )
+        
         # Generate job ID
         job_id = str(uuid.uuid4())
         
@@ -115,7 +135,7 @@ async def run_training(job_id: str, data_yaml: str, config: TrainingConfig):
         
         # Training parameters with strict configuration
         train_params = {
-            "data": data_yaml,
+            "data_yaml": data_yaml,
             "epochs": config.epochs,
             "imgsz": config.img_size,
             "batch": config.batch_size,
@@ -201,17 +221,98 @@ async def start_training_from_dataset(
     request: DatasetTrainingRequest
 ):
     """
-    Start training from an exported dataset
+    Start training from an exported dataset. Auto-exports if not already exported.
     """
     try:
         # Check if dataset exists
         dataset_path = Path(f"datasets/{request.dataset_id}")
         yaml_path = dataset_path / "data.yaml"
         
+        # If dataset not exported, export it first
+        if not yaml_path.exists():
+            logger.info(f"Dataset {request.dataset_id} not exported. Auto-exporting...")
+            
+            # Import export logic
+            from database_service import DatasetService
+            import shutil
+            import random
+            
+            # Get dataset
+            dataset = DatasetService.get_dataset(request.dataset_id)
+            if not dataset:
+                raise HTTPException(status_code=404, detail="Dataset not found")
+            
+            # Get annotated images
+            all_images = DatasetService.get_dataset_images(request.dataset_id)
+            annotated_images = [img for img in all_images if img.get("annotated", False)]
+            
+            if not annotated_images:
+                raise HTTPException(status_code=400, detail="No annotated images in dataset")
+            
+            # Check for manual splits
+            images_with_split = [img for img in annotated_images if img.get("split")]
+            
+            if images_with_split:
+                train_images = [img for img in annotated_images if img.get("split") == "train"]
+                val_images = [img for img in annotated_images if img.get("split") == "val"]
+                test_images = [img for img in annotated_images if img.get("split") == "test"]
+                train_images.extend([img for img in annotated_images if not img.get("split")])
+            else:
+                random.shuffle(annotated_images)
+                split_idx = int(len(annotated_images) * 0.8)
+                train_images = annotated_images[:split_idx]
+                val_images = annotated_images[split_idx:]
+                test_images = []
+            
+            # Create split directories
+            train_dir = dataset_path / "split" / "train"
+            val_dir = dataset_path / "split" / "val"
+            test_dir = dataset_path / "split" / "test"
+            
+            for split_dir, images, _ in [(train_dir, train_images, "train"), (val_dir, val_images, "val"), (test_dir, test_images, "test")]:
+                if images:
+                    (split_dir / "images").mkdir(parents=True, exist_ok=True)
+                    (split_dir / "labels").mkdir(parents=True, exist_ok=True)
+                    
+                    for img in images:
+                        src_img = dataset_path / "images" / img["filename"]
+                        dst_img = split_dir / "images" / img["filename"]
+                        if src_img.exists():
+                            shutil.copy2(src_img, dst_img)
+                        
+                        label_name = f"{Path(img['filename']).stem}.txt"
+                        src_label = dataset_path / "labels" / label_name
+                        dst_label = split_dir / "labels" / label_name
+                        if src_label.exists():
+                            shutil.copy2(src_label, dst_label)
+            
+            # Create data.yaml
+            split_path = (dataset_path / 'split').resolve()
+            yaml_content = f"""# YOLO Dataset Configuration
+# Generated from dataset: {dataset['name']}
+
+path: {split_path}
+train: train/images
+val: val/images
+"""
+            if test_images:
+                yaml_content += "test: test/images\n"
+            
+            yaml_content += "\n# Classes\nnames:\n"
+            for idx, class_name in enumerate(dataset["classes"]):
+                yaml_content += f"  {idx}: {class_name}\n"
+            yaml_content += f"\nnc: {len(dataset['classes'])}\n"
+            
+            with open(yaml_path, 'w') as f:
+                f.write(yaml_content)
+            
+            logger.info(f"Dataset {request.dataset_id} exported successfully")
+        
+        # Verify yaml exists now
         if not yaml_path.exists():
             raise HTTPException(
-                status_code=404, 
-                detail="Dataset not found or not exported. Export dataset first."
+                status_code=500,
+                detail="Failed to export dataset. YAML file not found."
             )
         
         # Generate job ID
@@ -239,7 +340,10 @@ async def start_training_from_dataset(
             "message": "Training job started from dataset"
         })
         
+    except HTTPException:
+        raise
     except Exception as e:
+        logger.error(f"Error starting training from dataset: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/export-and-train")
@@ -318,10 +422,11 @@ async def export_and_train(
                             shutil.copy2(src_label, dst_label)
             
             # Create data.yaml
+            split_path = (dataset_path / 'split').resolve()
             yaml_content = f"""# YOLO Dataset Configuration
 # Generated from dataset: {dataset['name']}
 
-path: {dataset_path / 'split'}
+path: {split_path}
 train: train/images
 val: val/images
 """

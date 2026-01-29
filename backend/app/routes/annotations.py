@@ -1,5 +1,6 @@
-from fastapi import APIRouter, File, UploadFile, HTTPException, Form
+from fastapi import APIRouter, File, UploadFile, HTTPException, Form, Body
 from fastapi.responses import JSONResponse, FileResponse
+from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel
 from typing import List, Dict, Optional
 import os
@@ -12,12 +13,19 @@ from datetime import datetime
 import aiofiles
 import zipfile
 import sys
+import logging
+from dataclasses import asdict
+from PIL import Image, ImageOps, ImageFilter
+import random
+import copy
+
 
 # Add parent directory to path for imports
 sys.path.append(str(Path(__file__).parent.parent.parent))
 from database_service import DatasetService, AnnotationService
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 # Keep in-memory storage as fallback/backup
 annotations_db: Dict[str, Dict] = {}
@@ -42,6 +50,11 @@ class Dataset(BaseModel):
     name: str
     description: Optional[str] = ""
     classes: List[str]
+
+class ExportRequest(BaseModel):
+    split_ratio: float = 0.8
+    config: Optional[Dict[str, bool]] = None
+
 
 @router.post("/datasets/create")
 async def create_dataset(dataset: Dataset):
@@ -80,12 +93,14 @@ async def create_dataset(dataset: Dataset):
     
     # Get from database to return complete data
     db_dataset = DatasetService.get_dataset(dataset_id)
+    dataset_data = db_dataset or datasets_db[dataset_id]
     
-    return JSONResponse(content={
+    # Convert datetime objects to strings for JSON serialization
+    return JSONResponse(content=jsonable_encoder({
         "success": True,
         "dataset_id": dataset_id,
-        "dataset": db_dataset or datasets_db[dataset_id]
-    })
+        "dataset": dataset_data
+    }))
 
 @router.get("/datasets/list")
 async def list_datasets():
@@ -358,14 +373,17 @@ async def get_annotation(dataset_id: str, image_id: str):
     return annotations_db[annotation_id]
 
 @router.post("/datasets/{dataset_id}/export")
-async def export_dataset(dataset_id: str, split_ratio: float = 0.8):
+async def export_dataset(dataset_id: str, request: ExportRequest = Body(default_factory=ExportRequest)):
     """
-    Export dataset in YOLO format with train/val/test split
-    Uses manually assigned splits if available, otherwise uses split_ratio
+    Export dataset in YOLO format with train/val/test split and optional augmentations.
+    Config example: {"flipHorizontal": true, "flipVertical": false, "noise": true}
     """
     if dataset_id not in datasets_db:
         raise HTTPException(status_code=404, detail="Dataset not found")
     
+    split_ratio = request.split_ratio
+    augmentations = request.config or {}
+
     # Get dataset from database
     db_dataset = DatasetService.get_dataset(dataset_id)
     if not db_dataset:
@@ -434,12 +452,76 @@ async def export_dataset(dataset_id: str, split_ratio: float = 0.8):
                 dst_label = split_dir / "labels" / label_name
                 if src_label.exists():
                     shutil.copy2(src_label, dst_label)
+
+                # --- AUGMENTATIONS (Training Set Only) ---
+                if split_name == "train" and augmentations and any(augmentations.values()):
+                    try:
+                        # Load original image
+                        with Image.open(src_img) as im:
+                            # 1. Horizontal Flip
+                            if augmentations.get("flipHorizontal"):
+                                aug_filename = f"aug_hflip_{img['filename']}"
+                                aug_img_path = split_dir / "images" / aug_filename
+                                aug_label_path = split_dir / "labels" / f"{Path(aug_filename).stem}.txt"
+                                
+                                # Flip Image
+                                im_flipped = ImageOps.mirror(im)
+                                im_flipped.save(aug_img_path)
+                                
+                                # Flip Label (x_center = 1 - x_center)
+                                if src_label.exists():
+                                    with open(src_label, 'r') as f_src, open(aug_label_path, 'w') as f_dst:
+                                        for line in f_src:
+                                            parts = line.strip().split()
+                                            if len(parts) >= 5:
+                                                cls, x, y, w, h = parts[0], float(parts[1]), float(parts[2]), float(parts[3]), float(parts[4])
+                                                new_x = 1.0 - x
+                                                f_dst.write(f"{cls} {new_x} {y} {w} {h}\n")
+                                                
+                            # 2. Vertical Flip
+                            if augmentations.get("flipVertical"):
+                                aug_filename = f"aug_vflip_{img['filename']}"
+                                aug_img_path = split_dir / "images" / aug_filename
+                                aug_label_path = split_dir / "labels" / f"{Path(aug_filename).stem}.txt"
+                                
+                                # Flip Image
+                                im_flipped = ImageOps.flip(im)
+                                im_flipped.save(aug_img_path)
+                                
+                                # Flip Label (y_center = 1 - y_center)
+                                if src_label.exists():
+                                    with open(src_label, 'r') as f_src, open(aug_label_path, 'w') as f_dst:
+                                        for line in f_src:
+                                            parts = line.strip().split()
+                                            if len(parts) >= 5:
+                                                cls, x, y, w, h = parts[0], float(parts[1]), float(parts[2]), float(parts[3]), float(parts[4])
+                                                new_y = 1.0 - y
+                                                f_dst.write(f"{cls} {x} {new_y} {w} {h}\n")
+                                                
+                            # 3. Noise/Blur (Grayscale for noise in this basic impl)
+                            if augmentations.get("noise"):
+                                aug_filename = f"aug_noise_{img['filename']}"
+                                aug_img_path = split_dir / "images" / aug_filename
+                                aug_label_path = split_dir / "labels" / f"{Path(aug_filename).stem}.txt"
+                                
+                                # Apply effect
+                                im_noise = im.convert("L").convert("RGB") # Simple grayscale
+                                im_noise.save(aug_img_path)
+                                
+                                # Copy Label directly (no coordinate change)
+                                if src_label.exists():
+                                    shutil.copy2(src_label, aug_label_path)
+                                    
+                    except Exception as e:
+                        print(f"Augmentation failed for {img['filename']}: {e}")
+
     
     # Create data.yaml
+    split_path = (dataset_dir / 'split').resolve()
     yaml_content = f"""# YOLO Dataset Configuration
 # Generated from dataset: {dataset['name']}
 
-path: {dataset_dir / 'split'}
+path: {split_path}
 train: train/images
 val: val/images
 """
@@ -633,4 +715,3 @@ async def serve_image(dataset_id: str, image_filename: str):
             "Cache-Control": "public, max-age=3600"
         }
     )
-
