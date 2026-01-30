@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { FiDatabase, FiDownload, FiTrash2, FiInfo, FiRefreshCw } from "react-icons/fi";
+import { FiDatabase, FiDownload, FiTrash2, FiInfo, FiRefreshCw, FiBox, FiClock, FiHardDrive } from "react-icons/fi";
 
 export default function ModelsTab() {
   const [models, setModels] = useState([]);
@@ -18,13 +18,19 @@ export default function ModelsTab() {
       setModels(data.models || []);
     } catch (error) {
       console.error("Error fetching models:", error);
-      // Show demo data if backend is not available
+      // Fallback for demo
       setModels([
         {
-          name: "demo_model_v1",
-          path: "/runs/detect/demo_model_v1/weights/best.pt",
+          name: "yolov8n-custom-v1",
+          path: "/runs/detect/yolov8n-custom-v1/weights/best.pt",
           size: 6291456,
           created: Date.now() / 1000
+        },
+        {
+          name: "defect-detection-prod",
+          path: "/runs/detect/defect-detection-prod/weights/best.pt",
+          size: 12582912,
+          created: Date.now() / 1000 - 86400
         }
       ]);
     } finally {
@@ -49,60 +55,42 @@ export default function ModelsTab() {
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
     } catch (error) {
-      console.error("Download error:", error);
-      alert("Error downloading model. Make sure the backend is running.");
+      alert("Download failed. Backend unreachable.");
     }
   };
 
   const handleDelete = async (modelName) => {
-    if (!confirm(`Are you sure you want to delete model "${modelName}"?`)) {
-      return;
-    }
-
+    if (!confirm(`Delete model "${modelName}" permanently?`)) return;
     try {
-      const response = await fetch(`http://localhost:8000/api/models/delete/${modelName}`, {
-        method: "DELETE"
-      });
-      const data = await response.json();
-      
-      if (data.success) {
-        alert("Model deleted successfully");
-        fetchModels();
-      }
+      const response = await fetch(`http://localhost:8000/api/models/delete/${modelName}`, { method: "DELETE" });
+      if (response.ok) fetchModels();
     } catch (error) {
-      console.error("Delete error:", error);
-      alert("Error deleting model. Make sure the backend is running.");
+      alert("Delete failed.");
     }
   };
 
   const formatFileSize = (bytes) => {
-    if (bytes === 0) return "0 Bytes";
+    if (bytes === 0) return "0 B";
     const k = 1024;
-    const sizes = ["Bytes", "KB", "MB", "GB"];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + " " + sizes[i];
-  };
-
-  const formatDate = (timestamp) => {
-    const date = new Date(timestamp * 1000);
-    return date.toLocaleDateString() + " " + date.toLocaleTimeString();
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + ["B", "KB", "MB", "GB"][i];
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8 animate-fade-in text-gray-100">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-3xl font-bold text-primary">Trained Models</h2>
-          <p className="text-muted-foreground">Manage your trained YOLO models</p>
+          <h2 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-white to-white/60 bg-clip-text text-transparent">Model Registry</h2>
+          <p className="text-muted-foreground mt-1">Versioning and artifact management for your models.</p>
         </div>
         <Button
           onClick={fetchModels}
           disabled={isLoading}
           variant="outline"
-          className="border-border"
+          className="border-white/10 bg-white/5 hover:bg-white/10 text-white"
         >
           <FiRefreshCw className={`mr-2 ${isLoading ? "animate-spin" : ""}`} />
-          Refresh
+          Refresh Registry
         </Button>
       </div>
 
@@ -110,98 +98,80 @@ export default function ModelsTab() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {models.length > 0 ? (
           models.map((model, index) => (
-            <Card key={index} className="bg-card border-border hover:border-primary transition-colors">
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-lg bg-primary/20 border border-primary/40 flex items-center justify-center">
-                      <FiDatabase className="text-2xl text-primary" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-base">{model.name}</CardTitle>
-                      <Badge className="mt-1 bg-primary/20 text-primary border-primary/30">
-                        Trained
-                      </Badge>
-                    </div>
+            <div
+              key={index}
+              className="group relative rounded-2xl bg-card/40 backdrop-blur-md border border-white/5 hover:border-indigo-500/30 hover:bg-white/5 transition-all duration-300 flex flex-col overflow-hidden shadow-lg"
+            >
+              <div className="p-6 flex-1">
+                <div className="flex items-start justify-between mb-6">
+                  <div className="w-12 h-12 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-400 group-hover:bg-indigo-500/20 group-hover:scale-110 transition-all duration-300">
+                    <FiBox className="text-2xl" />
                   </div>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* Model Info */}
-                <div className="space-y-2 text-sm">
-                  <div className="flex items-center justify-between py-2 border-b border-border">
-                    <span className="text-muted-foreground">Size</span>
-                    <span className="font-medium">{formatFileSize(model.size)}</span>
-                  </div>
-                  <div className="flex items-center justify-between py-2 border-b border-border">
-                    <span className="text-muted-foreground">Created</span>
-                    <span className="font-medium text-xs">
-                      {formatDate(model.created)}
-                    </span>
-                  </div>
+                  <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20">
+                    Ready
+                  </Badge>
                 </div>
 
-                {/* Actions */}
-                <div className="flex gap-2">
-                  <Button
-                    onClick={() => handleDownload(model.name)}
-                    className="flex-1 bg-primary hover:bg-primary/90"
-                    size="sm"
-                  >
-                    <FiDownload className="mr-1" />
-                    Download
-                  </Button>
-                  <Button
-                    onClick={() => handleDelete(model.name)}
-                    variant="outline"
-                    className="border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground"
-                    size="sm"
-                  >
-                    <FiTrash2 />
-                  </Button>
+                <h3 className="font-bold text-lg mb-1 text-white truncate" title={model.name}>{model.name}</h3>
+                <p className="text-sm text-gray-500 font-mono mb-6">v8.0.0 • PyTorch</p>
+
+                <div className="space-y-3 text-sm text-gray-400">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <FiHardDrive className="text-gray-500" />
+                      <span>Size</span>
+                    </div>
+                    <span className="text-gray-200 font-medium">{formatFileSize(model.size)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <FiClock className="text-gray-500" />
+                      <span>Created</span>
+                    </div>
+                    <span className="text-gray-200">{new Date(model.created * 1000).toLocaleDateString()}</span>
+                  </div>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+
+              <div className="p-4 bg-white/5 border-t border-white/5 flex items-center gap-3">
+                <Button
+                  onClick={() => handleDownload(model.name)}
+                  className="flex-1 bg-white text-black hover:bg-gray-200"
+                  size="sm"
+                >
+                  <FiDownload className="mr-2" /> Download
+                </Button>
+                <Button
+                  onClick={() => handleDelete(model.name)}
+                  variant="ghost"
+                  size="icon"
+                  className="text-gray-400 hover:text-red-400 hover:bg-red-400/10"
+                >
+                  <FiTrash2 />
+                </Button>
+              </div>
+            </div>
           ))
         ) : (
-          <Card className="col-span-full bg-card border-border">
-            <CardContent className="flex flex-col items-center justify-center py-12">
-              <FiDatabase className="text-6xl text-muted-foreground opacity-20 mb-4" />
-              <p className="text-muted-foreground mb-2">No trained models found</p>
-              <p className="text-sm text-muted-foreground">
-                Train a model to see it here
-              </p>
-            </CardContent>
-          </Card>
+          <div className="col-span-full py-20 text-center rounded-2xl border border-dashed border-white/10 bg-white/5">
+            <div className="w-16 h-16 rounded-full bg-indigo-500/10 flex items-center justify-center mx-auto mb-4 text-indigo-400">
+              <FiDatabase className="text-3xl" />
+            </div>
+            <h3 className="text-xl font-bold mb-2">Registry Empty</h3>
+            <p className="text-muted-foreground">Train your first model to see artifacts here.</p>
+          </div>
         )}
       </div>
 
-      {/* Info Card */}
-      <Card className="bg-gradient-to-br from-primary/5 to-accent/5 border-primary/30">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-primary">
-            <FiInfo />
-            About Models
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-2 text-sm text-muted-foreground">
-            <p>
-              • Models are stored in the <code className="bg-background px-1 py-0.5 rounded">runs/detect</code> directory
-            </p>
-            <p>
-              • Each training run creates a new model with unique weights
-            </p>
-            <p>
-              • Download models to use them in production or share with others
-            </p>
-            <p>
-              • Models can be loaded directly into the inference engine
-            </p>
+      {!isLoading && models.length > 0 && (
+        <div className="rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-4 flex items-start gap-3">
+          <FiInfo className="text-indigo-400 mt-1 flex-shrink-0" />
+          <div className="text-sm text-indigo-200/80">
+            <strong className="text-indigo-100 block mb-1">Deployment Note</strong>
+            Models can be directly referenced in the Inference API using their filename (e.g., <code>model_name.pt</code>). Ensure consistency between training config and inference requests.
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      )}
     </div>
   );
 }
-

@@ -9,7 +9,7 @@ module.exports = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['var(--font-inter)', 'system-ui', 'sans-serif'],
+        sans: ['var(--font-jakarta)', 'system-ui', 'sans-serif'],
       },
       colors: {
         background: "hsl(var(--background))",
@@ -59,6 +59,10 @@ module.exports = {
         sm: "calc(var(--radius) - 4px)",
       },
     },
+    backgroundImage: {
+      'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
+      'hero-glow': 'conic-gradient(from 180deg at 50% 50%, #2a8af6 0deg, #a853ba 180deg, #e92a67 360deg)',
+    },
     keyframes: {
       "fade-in": {
         "0%": { opacity: "0" },
@@ -68,10 +72,15 @@ module.exports = {
         "0%": { transform: "translateY(20px)", opacity: "0" },
         "100%": { transform: "translateY(0)", opacity: "1" },
       },
+      "pulse-glow": {
+        "0%, 100%": { opacity: "1", transform: "scale(1)" },
+        "50%": { opacity: "0.5", transform: "scale(0.95)" },
+      }
     },
     animation: {
-      "fade-in": "fade-in 0.8s ease-out forwards",
-      "slide-up": "slide-up 0.8s ease-out forwards",
+      "fade-in": "fade-in 0.5s ease-out forwards",
+      "slide-up": "slide-up 0.5s ease-out forwards",
+      "pulse-glow": "pulse-glow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite",
     },
 
   },

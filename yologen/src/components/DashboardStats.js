@@ -1,8 +1,9 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { FiZap, FiCpu, FiDatabase, FiTrendingUp } from "react-icons/fi";
+import { FiZap, FiCpu, FiDatabase, FiTrendingUp, FiActivity, FiClock, FiCheck } from "react-icons/fi";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 export default function DashboardStats({ onNavigate }) {
   const stats = [
@@ -11,119 +12,143 @@ export default function DashboardStats({ onNavigate }) {
       value: "1,234",
       change: "+12.5%",
       icon: FiZap,
+      color: "text-amber-400 bg-amber-400/10",
+      trend: "up"
     },
     {
       title: "Training Jobs",
       value: "8",
-      change: "+2",
+      change: "+2 active",
       icon: FiCpu,
+      color: "text-blue-400 bg-blue-400/10",
+      trend: "neutral"
     },
     {
-      title: "Models Trained",
+      title: "Models Registry",
       value: "24",
-      change: "+4",
+      change: "4 production",
       icon: FiDatabase,
+      color: "text-purple-400 bg-purple-400/10",
+      trend: "up"
     },
     {
       title: "Avg Accuracy",
       value: "94.2%",
       change: "+3.1%",
-      icon: FiTrendingUp,
+      icon: FiActivity,
+      color: "text-emerald-400 bg-emerald-400/10",
+      trend: "up"
     }
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8 animate-fade-in">
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {stats.map((stat, index) => (
-          <Card key={index} className="bg-card">
-            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                {stat.title}
-              </CardTitle>
-              <stat.icon className="text-xl text-primary" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stat.value}</div>
-              <p className="text-xs text-primary mt-1">{stat.change}</p>
-            </CardContent>
-          </Card>
+          <div
+            key={index}
+            className="group relative p-6 rounded-2xl bg-card/40 backdrop-blur-md border border-white/5 hover:bg-white/5 transition-all duration-300 hover:-translate-y-1 shadow-lg shadow-black/10"
+          >
+            <div className="flex justify-between items-start mb-4">
+              <div className={cn("p-3 rounded-xl", stat.color)}>
+                <stat.icon className="text-xl" />
+              </div>
+              {stat.trend === "up" && (
+                <span className="flex items-center text-emerald-400 text-xs font-mono bg-emerald-400/10 px-2 py-1 rounded-full">
+                  <FiTrendingUp className="mr-1" /> {stat.change}
+                </span>
+              )}
+            </div>
+            <div>
+              <p className="text-muted-foreground text-sm font-medium">{stat.title}</p>
+              <h3 className="text-3xl font-bold mt-1 text-white tracking-tight">{stat.value}</h3>
+            </div>
+
+            {/* Glow Effect on Hover */}
+            <div className="absolute inset-0 rounded-2xl bg-gradient-to-tr from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+          </div>
         ))}
       </div>
 
       {/* Quick Actions */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="bg-card border-border">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <FiZap className="text-primary" />
-              Quick Inference
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground mb-6">
-              Upload an image and get instant object detection results using pre-trained YOLO models.
-            </p>
+        <div className="p-1 rounded-2xl bg-gradient-to-br from-indigo-500/20 via-transparent to-transparent">
+          <div className="h-full rounded-xl bg-card/60 backdrop-blur-md border border-white/5 p-6 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2 bg-indigo-500/20 rounded-lg text-indigo-400">
+                  <FiZap />
+                </div>
+                <h3 className="text-lg font-bold">Quick Inference</h3>
+              </div>
+              <p className="text-muted-foreground text-sm leading-relaxed mb-6">
+                Drag & drop images to test your best model instantly. Supported formats: JPG, PNG, WEBP.
+              </p>
+            </div>
             <Button
-              variant="outline"
-              className="w-full"
+              className="w-full bg-indigo-600 hover:bg-indigo-500 text-white border-0 shadow-lg shadow-indigo-500/20"
               onClick={() => onNavigate && onNavigate("inference")}
             >
               Start Detection
             </Button>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
-        <Card className="bg-card border-border">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <FiCpu className="text-primary" />
-              Start Training
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground mb-6">
-              Train custom YOLO models on your own datasets with full control over hyperparameters.
-            </p>
+        <div className="p-1 rounded-2xl bg-gradient-to-br from-purple-500/20 via-transparent to-transparent">
+          <div className="h-full rounded-xl bg-card/60 backdrop-blur-md border border-white/5 p-6 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2 bg-purple-500/20 rounded-lg text-purple-400">
+                  <FiCpu />
+                </div>
+                <h3 className="text-lg font-bold">Start New Training</h3>
+              </div>
+              <p className="text-muted-foreground text-sm leading-relaxed mb-6">
+                Configure a new training run on the GPU cluster. Requires a prepared dataset version.
+              </p>
+            </div>
             <Button
               variant="outline"
-              className="w-full"
+              className="w-full border-white/10 hover:bg-white/5 bg-transparent"
               onClick={() => onNavigate && onNavigate("datasets")}
             >
               Create Dataset
             </Button>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
 
-      {/* Recent Activity */}
-      <Card className="bg-card">
-        <CardHeader>
-          <CardTitle className="text-lg">Recent Activity</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="divide-y divide-border">
-            {[
-              { action: "Inference completed", model: "yolov8n.pt", time: "2 minutes ago", status: "success" },
-              { action: "Training started", model: "custom_v1", time: "1 hour ago", status: "running" },
-              { action: "Model exported", model: "yolov8s.pt", time: "3 hours ago", status: "success" },
-            ].map((activity, index) => (
-              <div key={index} className="flex items-center justify-between py-4 first:pt-0 last:pb-0">
-                <div className="flex items-center gap-3">
-                  <div className={`w-2 h-2 rounded-full ${activity.status === "success" ? "bg-primary" : "bg-muted"
-                    }`} />
-                  <div>
-                    <p className="text-sm font-medium">{activity.action}</p>
-                    <p className="text-xs text-muted-foreground">{activity.model} • {activity.time}</p>
-                  </div>
+      {/* Recent Activity Table (Simulated) */}
+      <div className="rounded-2xl bg-card/40 backdrop-blur-md border border-white/5 overflow-hidden">
+        <div className="p-6 border-b border-white/5 flex items-center justify-between">
+          <h3 className="text-lg font-bold">Recent Pipeline Activity</h3>
+          <Button variant="ghost" size="sm" className="text-xs text-muted-foreground">View All</Button>
+        </div>
+        <div className="divide-y divide-white/5">
+          {[
+            { action: "Inference completed", model: "yolov8n-v2.pt", time: "2 min ago", status: "success", icon: FiCheck },
+            { action: "Training started", model: "custom-detect-v3", time: "1 hr ago", status: "running", icon: FiClock },
+            { action: "Dataset exported", model: "construction-site-v1", time: "3 hrs ago", status: "success", icon: FiCheck },
+          ].map((activity, index) => (
+            <div key={index} className="flex items-center justify-between p-4 hover:bg-white/5 transition-colors">
+              <div className="flex items-center gap-4">
+                <div className={cn(
+                  "w-8 h-8 rounded-full flex items-center justify-center text-xs",
+                  activity.status === "success" ? "bg-emerald-500/20 text-emerald-400" : "bg-blue-500/20 text-blue-400"
+                )}>
+                  <activity.icon />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-200">{activity.action}</p>
+                  <p className="text-xs text-muted-foreground">{activity.model}</p>
                 </div>
               </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+              <span className="text-xs font-mono text-gray-500">{activity.time}</span>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
-

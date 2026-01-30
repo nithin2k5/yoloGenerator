@@ -5,13 +5,21 @@ import { useRouter } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-import { FiCheckCircle, FiCircle, FiArrowRight, FiUpload, FiEdit, FiDownload, FiPlay, FiSettings, FiFile } from "react-icons/fi";
+import {
+  FiCheckCircle,
+  FiUpload as UploadIcon,
+  FiEdit,
+  FiDownload,
+  FiPlay,
+  FiBox,
+  FiLayers
+} from "react-icons/fi";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { API_ENDPOINTS } from "@/lib/config";
+import { cn } from "@/lib/utils";
 
 export default function DatasetWorkflow({ dataset, onRefresh }) {
   const router = useRouter();
@@ -35,14 +43,10 @@ export default function DatasetWorkflow({ dataset, onRefresh }) {
     }
   }, [dataset, stats]);
 
-  // Refresh stats periodically when dataset is active
+  // Refresh stats periodically
   useEffect(() => {
     if (!dataset) return;
-
-    const interval = setInterval(() => {
-      fetchDatasetStats();
-    }, 3000); // Refresh every 3 seconds
-
+    const interval = setInterval(fetchDatasetStats, 3000);
     return () => clearInterval(interval);
   }, [dataset]);
 
@@ -58,157 +62,83 @@ export default function DatasetWorkflow({ dataset, onRefresh }) {
 
   const determineCurrentStep = () => {
     if (!dataset) return 0;
-
-    // Check if has images
     if (!dataset.images || dataset.images.length === 0) {
-      setCurrentStep(1); // Need to upload images
+      setCurrentStep(1);
       return;
     }
-
-    // Check if annotated
     const annotatedCount = dataset.images.filter(img => img.annotated).length;
-    if (annotatedCount === 0) {
-      setCurrentStep(2); // Need to annotate
-      return;
-    }
-
     if (annotatedCount < dataset.images.length) {
-      setCurrentStep(2); // Still annotating
+      setCurrentStep(2);
       return;
     }
-
-    // Check if exported
-    // We'll assume if all are annotated, next step is export
-    setCurrentStep(3); // Ready to export
+    setCurrentStep(3);
   };
 
   const steps = [
     {
       number: 1,
-      title: "Create Dataset",
-      description: "Define classes and setup",
-      action: "Dataset Created",
-      icon: FiCheckCircle,
-      status: "complete"
+      id: "create",
+      title: "Initialize",
+      description: "Dataset setup",
+      icon: FiLayers,
     },
     {
       number: 2,
-      title: "Upload Images",
-      description: "Add training images",
-      action: "Upload",
-      icon: FiUpload,
-      status: dataset?.images?.length > 0 ? "complete" : "current"
+      id: "upload",
+      title: "Upload",
+      description: "Add images",
+      icon: UploadIcon,
     },
     {
       number: 3,
+      id: "annotate",
       title: "Annotate",
-      description: "Label objects in images",
-      action: "Annotate",
+      description: "Label objects",
       icon: FiEdit,
-      status: stats?.annotated_images === stats?.total_images && stats?.total_images > 0 ? "complete" :
-        stats?.annotated_images > 0 ? "current" : "pending"
     },
     {
       number: 4,
+      id: "export",
       title: "Export",
-      description: "Generate YOLO format",
-      action: "Export",
+      description: "Prepare data",
       icon: FiDownload,
-      status: "pending"
     },
     {
       number: 5,
-      title: "Train Model",
-      description: "Train on your dataset",
-      action: "Train",
+      id: "train",
+      title: "Train",
+      description: "Start Model",
       icon: FiPlay,
-      status: "pending"
     }
   ];
 
-  const getStepStatus = (step) => {
-    if (step.number === 1) return "complete";
+  const getStepStatus = (stepNumber) => {
+    if (stepNumber === 1) return "complete";
 
-    if (step.number === 2) {
+    if (stepNumber === 2) {
       if (dataset?.images?.length > 0) return "complete";
-      // Can only start step 2 if step 1 is complete
       return "current";
     }
 
-    if (step.number === 3) {
-      // Can only start step 3 if step 2 is complete (has images)
+    if (stepNumber === 3) {
       if (dataset?.images?.length === 0) return "pending";
+      if (stats?.annotated_images === stats?.total_images && stats?.total_images > 0) return "complete";
+      return "current";
+    }
 
-      if (stats?.annotated_images === stats?.total_images && stats?.total_images > 0) {
-        return "complete";
-      }
-      // If images exist, step 3 should be current (even if stats haven't refreshed yet)
-      if (dataset?.images?.length > 0) {
-        return "current";
-      }
+    if (stepNumber === 4) {
+      if (stats?.annotated_images === stats?.total_images && stats?.total_images > 0) return "current";
       return "pending";
     }
 
-    if (step.number === 4) {
-      // Can only export if all images are annotated
-      if (stats?.annotated_images === stats?.total_images && stats?.total_images > 0) {
-        return "current";
-      }
-      return "pending";
-    }
-
-    if (step.number === 5) {
-      // Can only train if dataset is exported
-      // We'll check if export was successful (this would need backend tracking)
-      return "pending";
-    }
-
+    if (stepNumber === 5) return "pending";
     return "pending";
   };
 
-  const canProceedToStep = (stepNumber) => {
-    if (stepNumber === 1) return true;
-    if (stepNumber === 2) return true; // Step 1 is always complete
-    if (stepNumber === 3) return dataset?.images?.length > 0;
-    if (stepNumber === 4) return stats?.annotated_images === stats?.total_images && stats?.total_images > 0;
-    if (stepNumber === 5) return false; // Would need export status check
-    return false;
-  };
+  const currentStepIndex = steps.findIndex(s => getStepStatus(s.number) === "current");
+  const progressPercent = Math.max(5, (currentStepIndex / (steps.length - 1)) * 100);
 
-  const getStepColor = (status) => {
-    switch (status) {
-      case "complete":
-        return "text-green-500 border-green-500 bg-green-500/10";
-      case "current":
-        return "text-primary border-primary bg-primary/10";
-      case "pending":
-        return "text-muted-foreground border-border bg-muted/10";
-      default:
-        return "text-muted-foreground border-border bg-muted/10";
-    }
-  };
-
-  const getProgressPercentage = () => {
-    let completed = 0;
-
-    // Step 1: Created (always complete)
-    completed += 20;
-
-    // Step 2: Images uploaded
-    if (dataset?.images?.length > 0) {
-      completed += 20;
-    }
-
-    // Step 3: Annotation progress
-    if (stats?.total_images > 0) {
-      completed += (stats.annotated_images / stats.total_images) * 20;
-    }
-
-    // Steps 4 & 5 not yet implemented
-    return Math.round(completed);
-  };
-
-  // Drag and Drop Handlers
+  // Drag & Drop Handlers
   const handleDragOver = useCallback((e) => {
     e.preventDefault();
     setIsDragging(true);
@@ -222,28 +152,22 @@ export default function DatasetWorkflow({ dataset, onRefresh }) {
   const handleDrop = useCallback(async (e) => {
     e.preventDefault();
     setIsDragging(false);
-
     const files = Array.from(e.dataTransfer.files);
-    if (files.length > 0) {
-      await uploadFiles(files);
-    }
+    if (files.length > 0) await uploadFiles(files);
   }, []);
 
   const uploadFiles = async (files) => {
-    // Validate file types
     const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/bmp', 'image/webp'];
     const invalidFiles = files.filter(file => !validTypes.includes(file.type));
 
     if (invalidFiles.length > 0) {
-      alert(`Invalid file types detected. Please upload only images (JPG, PNG, GIF, BMP, WEBP).\n\nInvalid files: ${invalidFiles.map(f => f.name).join(', ')}`);
+      alert(`Invalid file types: ${invalidFiles.map(f => f.name).join(', ')}`);
       return;
     }
 
     setUploading(true);
     const formData = new FormData();
-    files.forEach(file => {
-      formData.append("files", file);
-    });
+    files.forEach(file => formData.append("files", file));
 
     try {
       const response = await fetch(API_ENDPOINTS.DATASETS.UPLOAD(dataset.id), {
@@ -251,492 +175,327 @@ export default function DatasetWorkflow({ dataset, onRefresh }) {
         body: formData,
       });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText || `Upload failed: ${response.status}`);
-      }
-
+      if (!response.ok) throw new Error(await response.text());
       const data = await response.json();
 
       if (data.success) {
-        let message = `✅ ${data.uploaded} image${data.uploaded !== 1 ? 's' : ''} uploaded successfully!`;
-
-        if (data.errors && data.errors.length > 0) {
-          message += `\n\n⚠️ ${data.error_count} file${data.error_count !== 1 ? 's' : ''} failed:\n${data.errors.slice(0, 3).join('\n')}`;
-        }
-
-        // Not showing alert for drag drop to be smoother, maybe just refresh
         if (onRefresh) onRefresh();
         fetchDatasetStats();
       } else {
-        throw new Error(data.detail || "Failed to upload images");
+        throw new Error(data.detail || "Upload failed");
       }
     } catch (error) {
       console.error("Upload error:", error);
-      alert(`❌ Error uploading images: ${error.message}`);
+      alert(`Error uploading: ${error.message}`);
     } finally {
       setUploading(false);
     }
   };
 
+  // Render Logic
+  const renderStepContent = (step) => {
+    const status = getStepStatus(step.number);
 
-  return (
-    <Card className="bg-card border-border">
-      <CardHeader>
-        <CardTitle className="flex items-center justify-between">
-          <span>Dataset Pipeline</span>
-          <Badge className="bg-primary/20 text-primary border-primary/30">
-            {getProgressPercentage()}% Complete
-          </Badge>
-        </CardTitle>
-        <CardDescription>
-          Complete all steps in order (A to Z) to create and train your model
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-6">
-          {/* Progress Bar */}
-          <div className="space-y-2">
-            <Progress value={getProgressPercentage()} className="h-2" />
-            <p className="text-xs text-muted-foreground text-right">
-              {stats?.annotated_images || 0} of {stats?.total_images || 0} images annotated
-            </p>
+    // Upload Step
+    if (step.number === 2 && (status === "current" || status === "complete")) {
+      return (
+        <div className="mt-6 animate-in fade-in zoom-in duration-300">
+          <div
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            className={cn(
+              "group relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-8 text-center transition-all",
+              isDragging
+                ? "border-primary bg-primary/5 scale-[1.01]"
+                : "border-muted-foreground/25 hover:border-primary/50 hover:bg-muted/30"
+            )}
+          >
+            <div className="rounded-full bg-background p-4 shadow-sm ring-1 ring-inset ring-gray-900/5 mb-4 group-hover:scale-110 transition-transform">
+              <UploadIcon className={cn("text-2xl transition-colors", isDragging ? "text-primary" : "text-muted-foreground")} />
+            </div>
+
+            <div className="space-y-1 mb-4">
+              <p className="font-medium text-foreground">
+                {uploading ? "Uploading files..." : "Drop images here to upload"}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Support for JPG, PNG, WEBP
+              </p>
+            </div>
+
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={uploading}
+              className="relative"
+              onClick={() => document.getElementById("file-upload").click()}
+            >
+              Select Files
+            </Button>
+            <input
+              id="file-upload"
+              type="file"
+              multiple
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => e.target.files.length > 0 && uploadFiles(Array.from(e.target.files))}
+            />
           </div>
 
-          {/* Steps */}
-          <div className="space-y-4">
-            {steps.map((step, index) => {
-              const status = getStepStatus(step);
-              // const StepIcon = step.icon;
+          {dataset?.images?.length > 0 && (
+            <div className="mt-4 flex items-center gap-2 text-sm text-green-600 bg-green-50 px-3 py-2 rounded-md border border-green-100">
+              <FiCheckCircle />
+              <span>{dataset.images.length} images uploaded successfully</span>
+            </div>
+          )}
+        </div>
+      );
+    }
 
-              return (
-                <div key={step.number}>
-                  <div className={`flex items-center gap-4 p-4 rounded-lg border-2 transition-all ${getStepColor(status)}`}>
-                    {/* Step Number/Icon */}
-                    <div className={`w-12 h-12 rounded-full flex items-center justify-center border-2 ${status === "complete" ? "border-green-500 bg-green-500/20" :
-                      status === "current" ? "border-primary bg-primary/20" :
-                        "border-border bg-muted/20"
-                      }`}>
-                      {status === "complete" ? (
-                        <FiCheckCircle className="text-green-500 text-xl" />
-                      ) : (
-                        <span className={`text-lg font-bold ${status === "current" ? "text-primary" : "text-muted-foreground"
-                          }`}>
-                          {step.number}
-                        </span>
-                      )}
-                    </div>
+    // Annotate Step
+    if (step.number === 3 && (status === "current" || status === "complete")) {
+      return (
+        <div className="mt-6 space-y-4 animate-in fade-in slide-in-from-top-4 duration-300">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <Card className="border-muted bg-muted/30">
+              <CardContent className="p-4 flex flex-col items-center justify-center text-center">
+                <span className="text-3xl font-bold text-foreground">{stats?.total_images || 0}</span>
+                <span className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Total Images</span>
+              </CardContent>
+            </Card>
+            <Card className={cn("border-muted", stats?.completion_percentage === 100 ? "bg-green-500/10 border-green-200" : "bg-muted/30")}>
+              <CardContent className="p-4 flex flex-col items-center justify-center text-center">
+                <span className={cn("text-3xl font-bold", stats?.completion_percentage === 100 ? "text-green-600" : "text-primary")}>
+                  {stats?.annotated_images || 0}
+                </span>
+                <span className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Annotated</span>
+              </CardContent>
+            </Card>
+            <Card className="border-muted bg-muted/30 sm:col-span-2 lg:col-span-1">
+              <CardContent className="p-4 flex flex-col items-center justify-center text-center">
+                <span className="text-3xl font-bold text-foreground">{stats?.completion_percentage?.toFixed(0) || 0}%</span>
+                <span className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Completion</span>
+              </CardContent>
+            </Card>
+          </div>
 
-                    {/* Step Info */}
-                    <div className="flex-1">
-                      <h4 className="font-semibold text-sm">{step.title}</h4>
-                      <p className="text-xs text-muted-foreground mt-0.5">{step.description}</p>
+          <div className="flex justify-center pt-2">
+            <Button
+              size="lg"
+              onClick={() => router.push(`/annotate?dataset=${dataset.id}`)}
+              className="w-full sm:w-auto min-w-[200px] shadow-lg shadow-primary/20 transition-all hover:scale-105"
+            >
+              <FiEdit className="mr-2" />
+              {status === "complete" ? "Review Annotations" : "Start Annotating"}
+            </Button>
+          </div>
+        </div>
+      );
+    }
 
-                      {/* Status Details */}
-                      {step.number === 1 && (
-                        <p className="text-xs text-green-500 mt-1">
-                          ✓ Dataset &quot;{dataset?.name}&quot; created with {dataset?.classes?.length || 0} classes
-                        </p>
-                      )}
+    // Export Step
+    if (step.number === 4 && status === "current") {
+      return (
+        <div className="mt-6 flex flex-col sm:flex-row gap-4 justify-center animate-in fade-in zoom-in duration-300">
+          <Button
+            variant="outline"
+            size="lg"
+            className="h-auto py-6 px-8 flex flex-col gap-2 hover:bg-muted/50 border-2"
+            onClick={async () => {
+              try {
+                const res = await fetch(API_ENDPOINTS.DATASETS.EXPORT(dataset.id), { method: "POST" });
+                const data = await res.json();
+                if (data.success) {
+                  alert("Dataset exported successfully!");
+                  onRefresh();
+                } else throw new Error(data.detail);
+              } catch (e) { alert("Export failed"); }
+            }}
+          >
+            <FiDownload className="text-3xl mb-1 text-muted-foreground" />
+            <span className="font-semibold">Export Only</span>
+            <span className="text-xs font-normal text-muted-foreground">Get YOLO format zip</span>
+          </Button>
 
-                      {step.number === 2 && (
-                        <div className="mt-2">
-                          {status === "current" || status === "complete" ? (
-                            <div
-                              onDragOver={handleDragOver}
-                              onDragLeave={handleDragLeave}
-                              onDrop={handleDrop}
-                              className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${isDragging
-                                ? "border-primary bg-primary/10"
-                                : "border-border/50 hover:border-primary/50 hover:bg-muted/50"
-                                }`}
-                            >
-                              <div className="flex flex-col items-center gap-2">
-                                <FiUpload className={`text-2xl ${isDragging ? "text-primary" : "text-muted-foreground"}`} />
-                                <p className="text-sm font-medium">
-                                  {uploading ? "Uploading..." : "Drag & Drop images here"}
-                                </p>
-                                <p className="text-xs text-muted-foreground">or click to browse</p>
-                                <Button
-                                  size="sm"
-                                  variant="secondary"
-                                  disabled={uploading}
-                                  onClick={() => {
-                                    const input = document.createElement('input');
-                                    input.type = 'file';
-                                    input.multiple = true;
-                                    input.accept = 'image/*,.jpg,.jpeg,.png,.gif,.bmp,.webp';
-                                    input.onchange = (e) => {
-                                      if (e.target.files.length > 0) uploadFiles(Array.from(e.target.files));
-                                    };
-                                    input.click();
-                                  }}
-                                >
-                                  Select Files
-                                </Button>
-                              </div>
-                            </div>
-                          ) : null}
-                          {dataset?.images?.length > 0 && (
-                            <p className="text-xs text-green-500 mt-2">
-                              ✓ {dataset.images.length} images uploaded
-                            </p>
-                          )}
-                        </div>
-                      )}
-
-                      {step.number === 3 && (
-                        <div className="mt-1">
-                          {stats?.total_images > 0 ? (
-                            <p className="text-xs text-primary">
-                              {stats.annotated_images} / {stats.total_images} annotated ({stats.completion_percentage.toFixed(0)}%)
-                            </p>
-                          ) : (
-                            <p className="text-xs text-muted-foreground">
-                              ⚠️ Upload images first before annotating
-                            </p>
-                          )}
-                          {stats?.annotated_images === stats?.total_images && stats?.total_images > 0 && (
-                            <p className="text-xs text-green-500 mt-1">
-                              ✓ All images annotated! Ready to export.
-                            </p>
-                          )}
-                        </div>
-                      )}
-
-                      {step.number === 4 && (
-                        <div className="mt-1">
-                          {stats?.annotated_images === stats?.total_images && stats?.total_images > 0 ? (
-                            <p className="text-xs text-primary">
-                              Ready to export {stats.total_images} annotated images
-                            </p>
-                          ) : (
-                            <p className="text-xs text-muted-foreground">
-                              ⚠️ Complete annotation ({stats?.annotated_images || 0} / {stats?.total_images || 0})
-                            </p>
-                          )}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Action Button */}
-                    <div>
-                      {(status === "current" || status === "complete") && step.number === 3 && dataset?.images?.length > 0 && (
-                        <Button
-                          size="sm"
-                          onClick={() => {
-                            if (!dataset || !dataset.id) return;
-                            router.push(`/annotate?dataset=${dataset.id}`);
-                          }}
-                          className="bg-primary hover:bg-primary/90"
-                        >
-                          <FiEdit className="mr-1" />
-                          {status === "complete" ? "Continue Annotating" : "Start Annotating"}
-                        </Button>
-                      )}
-
-                      {status === "current" && step.number === 4 && (
-                        <div className="flex gap-2">
-                          <Button
-                            size="sm"
-                            onClick={async () => {
-                              try {
-                                const response = await fetch(API_ENDPOINTS.DATASETS.EXPORT(dataset.id), {
-                                  method: "POST"
-                                });
-                                const data = await response.json();
-                                if (data.success) {
-                                  alert(`✅ Dataset exported successfully!\n\nTraining: ${data.train_images}\nValidation: ${data.val_images}`);
-                                  onRefresh();
-                                } else {
-                                  alert(`Error: ${data.detail || "Failed to export dataset"}`);
-                                }
-                              } catch (error) {
-                                alert("Error exporting dataset. Make sure backend is running.");
-                              }
-                            }}
-                            variant="outline"
-                            className="border-border"
-                          >
-                            <FiDownload className="mr-1" />
-                            Export Only
-                          </Button>
-                          <Dialog open={showTrainDialog} onOpenChange={setShowTrainDialog}>
-                            <DialogTrigger asChild>
-                              <Button
-                                size="sm"
-                                className="bg-green-600 hover:bg-green-700 text-white"
-                              >
-                                <FiPlay className="mr-1" />
-                                Export & Train
-                              </Button>
-                            </DialogTrigger>
-                            <DialogContent className="bg-card border-border max-w-md">
-                              <DialogHeader>
-                                <DialogTitle className="text-primary">Export & Train Configuration</DialogTitle>
-                                <DialogDescription>
-                                  Configure strict training parameters. All epochs will be completed.
-                                </DialogDescription>
-                              </DialogHeader>
-                              <div className="space-y-4 py-4">
-                                <div className="space-y-2">
-                                  <Label htmlFor="epochs">Epochs (Required)</Label>
-                                  <Input
-                                    id="epochs"
-                                    type="number"
-                                    min="1"
-                                    max="1000"
-                                    value={trainingConfig.epochs}
-                                    onChange={(e) => setTrainingConfig({ ...trainingConfig, epochs: parseInt(e.target.value) || 100 })}
-                                    className="bg-background border-border"
-                                  />
-                                  <p className="text-xs text-muted-foreground">
-                                    Number of training epochs (strict mode - all will run)
-                                  </p>
-                                </div>
-
-                                <div className="space-y-2">
-                                  <Label htmlFor="batch_size">Batch Size</Label>
-                                  <Input
-                                    id="batch_size"
-                                    type="number"
-                                    min="1"
-                                    max="128"
-                                    value={trainingConfig.batch_size}
-                                    onChange={(e) => setTrainingConfig({ ...trainingConfig, batch_size: parseInt(e.target.value) || 16 })}
-                                    className="bg-background border-border"
-                                  />
-                                </div>
-
-                                <div className="space-y-2">
-                                  <Label htmlFor="img_size">Image Size</Label>
-                                  <Select
-                                    value={trainingConfig.img_size.toString()}
-                                    onValueChange={(v) => setTrainingConfig({ ...trainingConfig, img_size: parseInt(v) })}
-                                  >
-                                    <SelectTrigger className="bg-background border-border">
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="320">320</SelectItem>
-                                      <SelectItem value="416">416</SelectItem>
-                                      <SelectItem value="512">512</SelectItem>
-                                      <SelectItem value="640">640</SelectItem>
-                                      <SelectItem value="768">768</SelectItem>
-                                      <SelectItem value="896">896</SelectItem>
-                                      <SelectItem value="1024">1024</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-
-                                <div className="space-y-2">
-                                  <Label htmlFor="model_name">Model</Label>
-                                  <Select
-                                    value={trainingConfig.model_name}
-                                    onValueChange={(v) => setTrainingConfig({ ...trainingConfig, model_name: v })}
-                                  >
-                                    <SelectTrigger className="bg-background border-border">
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="yolov8n.pt">YOLOv8 Nano (yolov8n.pt)</SelectItem>
-                                      <SelectItem value="yolov8s.pt">YOLOv8 Small (yolov8s.pt)</SelectItem>
-                                      <SelectItem value="yolov8m.pt">YOLOv8 Medium (yolov8m.pt)</SelectItem>
-                                      <SelectItem value="yolov8l.pt">YOLOv8 Large (yolov8l.pt)</SelectItem>
-                                      <SelectItem value="yolov8x.pt">YOLOv8 XLarge (yolov8x.pt)</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-
-                                <div className="space-y-2">
-                                  <Label htmlFor="learning_rate">Learning Rate</Label>
-                                  <Input
-                                    id="learning_rate"
-                                    type="number"
-                                    step="0.001"
-                                    min="0.0001"
-                                    max="1.0"
-                                    value={trainingConfig.learning_rate}
-                                    onChange={(e) => setTrainingConfig({ ...trainingConfig, learning_rate: parseFloat(e.target.value) || 0.01 })}
-                                    className="bg-background border-border"
-                                  />
-                                </div>
-
-                                <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
-                                  <p className="text-xs text-yellow-500 font-semibold mb-1">⚠️ Strict Training Mode</p>
-                                  <p className="text-xs text-muted-foreground">
-                                    All {trainingConfig.epochs} epochs will be completed. Early stopping is disabled.
-                                  </p>
-                                </div>
-
-                                <div className="flex gap-2 pt-2">
-                                  <Button
-                                    onClick={() => setShowTrainDialog(false)}
-                                    variant="outline"
-                                    className="flex-1 border-border"
-                                  >
-                                    Cancel
-                                  </Button>
-                                  <Button
-                                    onClick={async () => {
-                                      if (!trainingConfig.epochs || trainingConfig.epochs < 1) {
-                                        alert("Please enter a valid number of epochs (1-1000)");
-                                        return;
-                                      }
-
-                                      try {
-                                        const response = await fetch(API_ENDPOINTS.TRAINING.EXPORT_AND_TRAIN, {
-                                          method: "POST",
-                                          headers: { "Content-Type": "application/json" },
-                                          body: JSON.stringify({
-                                            dataset_id: dataset.id,
-                                            config: {
-                                              epochs: trainingConfig.epochs,
-                                              batch_size: trainingConfig.batch_size,
-                                              img_size: trainingConfig.img_size,
-                                              model_name: trainingConfig.model_name,
-                                              learning_rate: trainingConfig.learning_rate,
-                                              strict_epochs: true
-                                            }
-                                          })
-                                        });
-
-                                        const data = await response.json();
-
-                                        if (data.success) {
-                                          setShowTrainDialog(false);
-                                          // Close the workflow dialog as well to minimize clutter
-                                          const closeDialogBtn = document.querySelector('[data-radix-collection-item]');
-                                          if (closeDialogBtn) closeDialogBtn.click();
-
-                                          alert(`✅ Training started!\n\nSwitching to Training tab...`);
-                                          // Trigger navigation via custom event or hash change
-                                          // Since we can't easily access the parent Tabs state, we use basic hash approach or just reload
-                                          // ideally, we'd pass a "onNavigate" prop from Dashboard
-
-                                          // Attempt to find the "Training" tab button in the sidebar and click it
-                                          const buttons = Array.from(document.querySelectorAll('button'));
-                                          const trainingBtn = buttons.find(b => b.textContent.includes('Training'));
-                                          if (trainingBtn) {
-                                            trainingBtn.click();
-                                          }
-
-                                          if (onRefresh) onRefresh();
-                                        } else {
-                                          alert(`Error: ${data.detail || "Failed to start training"}`);
-                                        }
-                                      } catch (error) {
-                                        console.error("Error:", error);
-                                        alert("Error starting export and training. Make sure backend is running.");
-                                      }
-                                    }}
-                                    className="flex-1 bg-green-600 hover:bg-green-700 text-white"
-                                  >
-                                    <FiPlay className="mr-2" />
-                                    Start Training
-                                  </Button>
-                                </div>
-                              </div>
-                            </DialogContent>
-                          </Dialog>
-                        </div>
-                      )}
-
-                      {status === "pending" && (
-                        <Badge variant="secondary" className="text-xs">
-                          {!canProceedToStep(step.number) ? "Complete previous steps" : "Pending"}
-                        </Badge>
-                      )}
-
-                      {status === "complete" && step.number !== 2 && (
-                        <Badge className="bg-green-500/20 text-green-500 border-green-500/30 text-xs">
-                          ✓ Complete
-                        </Badge>
-                      )}
-                    </div>
+          <Dialog open={showTrainDialog} onOpenChange={setShowTrainDialog}>
+            <DialogTrigger asChild>
+              <Button
+                size="lg"
+                className="h-auto py-6 px-8 flex flex-col gap-2 bg-gradient-to-br from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white shadow-xl shadow-green-500/20 border-0"
+              >
+                <FiPlay className="text-3xl mb-1 text-white/90" />
+                <span className="font-semibold text-lg">Export & Train</span>
+                <span className="text-xs font-normal text-white/80">Start model training immediately</span>
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Train Configuration</DialogTitle>
+                <DialogDescription>Setup your training parameters</DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Epochs</Label>
+                    <Input
+                      type="number"
+                      value={trainingConfig.epochs}
+                      onChange={e => setTrainingConfig({ ...trainingConfig, epochs: +e.target.value })}
+                    />
                   </div>
-
-                  {/* Connector Line */}
-                  {index < steps.length - 1 && (
-                    <div className="flex justify-center py-2">
-                      <FiArrowRight className="text-muted-foreground" />
-                    </div>
-                  )}
+                  <div className="space-y-2">
+                    <Label>Batch Size</Label>
+                    <Input
+                      type="number"
+                      value={trainingConfig.batch_size}
+                      onChange={e => setTrainingConfig({ ...trainingConfig, batch_size: +e.target.value })}
+                    />
+                  </div>
                 </div>
-              );
-            })}
-          </div>
 
-          {/* Complete Training Button */}
-          {stats?.completion_percentage === 100 && (
-            <div className="pt-4 border-t border-border">
-              <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4 mb-4">
-                <p className="text-sm text-green-500 font-semibold mb-2">
-                  🎉 All Steps Complete!
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Your dataset is ready for training. Click below to start training your model.
-                </p>
+                <div className="space-y-2">
+                  <Label>Model Size</Label>
+                  <Select
+                    value={trainingConfig.model_name}
+                    onValueChange={v => setTrainingConfig({ ...trainingConfig, model_name: v })}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="yolov8n.pt">Nano (Fastest)</SelectItem>
+                      <SelectItem value="yolov8s.pt">Small</SelectItem>
+                      <SelectItem value="yolov8m.pt">Medium</SelectItem>
+                      <SelectItem value="yolov8l.pt">Large</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
+
               <Button
                 className="w-full bg-green-600 hover:bg-green-700 text-white"
-                size="lg"
                 onClick={async () => {
-                  if (!confirm("Ready to start training?\n\nThis will:\n1. Automatically export your dataset (if not already done)\n2. Start training with YOLOv8\n3. Monitor progress in Training tab\n\nContinue?")) return;
-
                   try {
-                    // Start training - endpoint will auto-export if needed
-                    const trainingResponse = await fetch(API_ENDPOINTS.TRAINING.START_FROM_DATASET, {
+                    const res = await fetch(API_ENDPOINTS.TRAINING.EXPORT_AND_TRAIN, {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify({
                         dataset_id: dataset.id,
-                        config: {
-                          epochs: 50,
-                          batch_size: 16,
-                          img_size: 640,
-                          model_name: "yolov8n.pt"
-                        }
+                        config: { ...trainingConfig, strict_epochs: true }
                       })
                     });
-
-                    const trainData = await trainingResponse.json();
-
-                    if (trainData.success) {
-                      alert(`✅ Training started successfully!\n\nJob ID: ${trainData.job_id}\n\nGo to the "Training" tab to monitor progress.`);
-                      // Optionally redirect to training tab
-                      const buttons = Array.from(document.querySelectorAll('button'));
-                      const trainingBtn = buttons.find(b => b.textContent.includes('Training'));
-                      if (trainingBtn) {
-                        trainingBtn.click();
-                      }
-                    } else {
-                      alert(`Error: ${trainData.detail || "Failed to start training"}`);
-                    }
-                  } catch (error) {
-                    console.error("Training error:", error);
-                    alert("Error starting training. Make sure backend is running and dataset has annotated images.");
-                  }
+                    const data = await res.json();
+                    if (data.success) {
+                      setShowTrainDialog(false);
+                      alert("Training started!");
+                      // Basic navigation attempt
+                      const btn = Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('Training'));
+                      if (btn) btn.click();
+                    } else throw new Error(data.detail);
+                  } catch (e) { alert("Failed to start training"); }
                 }}
               >
-                <FiPlay className="mr-2" />
-                Complete Pipeline - Start Training Now
+                Start Training
               </Button>
-            </div>
-          )}
+            </DialogContent>
+          </Dialog>
+        </div>
+      );
+    }
 
-          {/* Instructions */}
-          <div className="pt-4 border-t border-border mt-4">
-            <p className="text-xs text-muted-foreground mb-2 font-semibold">📋 Instructions:</p>
-            <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
-              <li>Create dataset with name and classes (comma-separated)</li>
-              <li>Upload images (minimum 10-20 recommended)</li>
-              <li>Annotate all images by drawing bounding boxes</li>
-              <li>Export dataset to YOLO format</li>
-              <li>Start training your custom model</li>
-            </ol>
+    return null;
+  };
+
+  return (
+    <Card className="border-none shadow-none bg-transparent">
+      <CardHeader className="px-0 pt-0 pb-8">
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="text-2xl font-bold tracking-tight">Dataset Pipeline</CardTitle>
+            <CardDescription className="text-base mt-1">Manage your dataset lifecycle from upload to training</CardDescription>
+          </div>
+          {stats && (
+            <Badge variant="outline" className="px-3 py-1 border-muted-foreground/20 text-muted-foreground">
+              {dataset?.classes?.length || 0} Classes
+            </Badge>
+          )}
+        </div>
+      </CardHeader>
+
+      <CardContent className="px-0">
+        {/* Horizontal Stepper */}
+        <div className="relative mb-12">
+          {/* Progress Line */}
+          <div className="absolute top-1/2 left-0 w-full h-0.5 bg-muted -translate-y-1/2 z-0 hidden md:block">
+            <div
+              className="h-full bg-primary transition-all duration-500 ease-in-out"
+              style={{ width: `${progressPercent}%` }}
+            />
+          </div>
+
+          <div className="relative z-10 grid grid-cols-1 md:grid-cols-5 gap-6 md:gap-0">
+            {steps.map((step, idx) => {
+              const status = getStepStatus(step.number);
+              const isComplete = status === "complete";
+              const isCurrent = status === "current";
+              const isPending = status === "pending";
+
+              return (
+                <div key={step.id} className="flex flex-row md:flex-col items-center gap-4 md:gap-3 text-left md:text-center group">
+                  <div
+                    className={cn(
+                      "w-10 h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center border-2 transition-all duration-300 shadow-sm",
+                      isComplete ? "bg-primary border-primary text-primary-foreground scale-100" :
+                        isCurrent ? "bg-background border-primary text-primary scale-110 ring-4 ring-primary/10" :
+                          "bg-muted border-transparent text-muted-foreground"
+                    )}
+                  >
+                    {isComplete ? <FiCheckCircle className="text-xl" /> : <step.icon className="text-lg" />}
+                  </div>
+                  <div className="flex-1 md:flex-none">
+                    <p className={cn("text-sm font-semibold transition-colors", isCurrent ? "text-foreground" : "text-muted-foreground")}>
+                      {step.title}
+                    </p>
+                    <p className="text-xs text-muted-foreground hidden md:block">{step.description}</p>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
+
+        {/* Active Step Content */}
+        <div className="min-h-[300px] border rounded-xl p-8 bg-card/50 backdrop-blur-sm shadow-sm relative overflow-hidden">
+          {steps.map(step => {
+            const status = getStepStatus(step.number);
+            if (status === "current" || (step.number === 3 && status === "complete" && getStepStatus(4) === "pending")) {
+              return (
+                <div key={step.id} className="animate-in fade-in duration-500">
+                  <div className="mb-6 pb-6 border-b border-border/50">
+                    <h3 className="text-xl font-semibold flex items-center gap-2">
+                      <span className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-bold">
+                        {step.number}
+                      </span>
+                      {step.title} Stage
+                    </h3>
+                    <p className="text-muted-foreground ml-8 mt-1">{step.description}</p>
+                  </div>
+                  {renderStepContent(step)}
+                </div>
+              );
+            }
+            return null;
+          })}
+
+          {/* Empty State / Completion State Fallback can go here if needed */}
+          {getStepStatus(2) === "pending" && (
+            <div className="text-center py-12 text-muted-foreground">
+              <FiBox className="text-4xl mx-auto mb-4 opacity-20" />
+              <p>Complete the previous steps to unlock this stage.</p>
+            </div>
+          )}
+        </div>
+
+        {/* Navigation / Actions Footer (Optional, mostly handled in step content) */}
       </CardContent>
     </Card>
   );

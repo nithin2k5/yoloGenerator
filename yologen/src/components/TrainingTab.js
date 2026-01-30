@@ -8,7 +8,20 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { FiUpload, FiPlay, FiRefreshCw, FiCpu, FiCheckCircle, FiXCircle, FiClock, FiDownload, FiTrash2, FiEye } from "react-icons/fi";
+import {
+  FiUpload,
+  FiPlay,
+  FiRefreshCw,
+  FiCpu,
+  FiCheckCircle,
+  FiXCircle,
+  FiClock,
+  FiTrash2,
+  FiEye,
+  FiTerminal,
+  FiSettings
+} from "react-icons/fi";
+import { cn } from "@/lib/utils";
 
 export default function TrainingTab() {
   const [configFile, setConfigFile] = useState(null);
@@ -48,17 +61,16 @@ export default function TrainingTab() {
       });
 
       const data = await response.json();
-      
+
       if (data.success) {
         alert(`Training job ${data.job_id} started!`);
-        // Refresh jobs list
         fetchTrainingJobs();
       } else {
         alert(`Error: ${data.detail || "Failed to start training"}`);
       }
     } catch (error) {
       console.error("Training error:", error);
-      alert("Error starting training. Make sure the backend is running on port 8000.");
+      alert("Error starting training. Check backend connection.");
     } finally {
       setIsTraining(false);
     }
@@ -72,7 +84,6 @@ export default function TrainingTab() {
         const data = await response.json();
         setTrainingJobs(data.jobs || []);
       } else {
-        console.error("Failed to fetch training jobs");
         setTrainingJobs([]);
       }
     } catch (error) {
@@ -83,84 +94,63 @@ export default function TrainingTab() {
     }
   };
 
-  // Fetch jobs on component mount
   useEffect(() => {
     fetchTrainingJobs();
-    
-    // Auto-refresh every 3 seconds for running jobs
     const interval = setInterval(() => {
       fetchTrainingJobs();
     }, 3000);
-    
     return () => clearInterval(interval);
   }, []);
 
   const handleDeleteJob = async (jobId) => {
     if (!confirm(`Delete training job ${jobId.substring(0, 8)}?`)) return;
-    
     try {
       const response = await fetch(`http://localhost:8000/api/training/job/${jobId}`, {
         method: "DELETE"
       });
-      
       if (response.ok) {
-        alert("Training job deleted successfully");
         fetchTrainingJobs();
       } else {
-        const data = await response.json();
-        alert(`Error: ${data.detail || "Failed to delete job"}`);
+        alert("Failed to delete job");
       }
     } catch (error) {
       console.error("Error deleting job:", error);
-      alert("Error deleting training job");
     }
   };
 
   const getStatusIcon = (status) => {
     switch (status) {
-      case "completed":
-        return <FiCheckCircle className="text-primary" />;
-      case "running":
-        return <FiRefreshCw className="text-accent animate-spin" />;
-      case "failed":
-        return <FiXCircle className="text-destructive" />;
-      default:
-        return <FiClock className="text-muted-foreground" />;
-    }
-  };
-
-  const getStatusColor = (status) => {
-    switch (status) {
-      case "completed":
-        return "bg-primary text-primary-foreground";
-      case "running":
-        return "bg-accent text-accent-foreground";
-      case "failed":
-        return "bg-destructive text-destructive-foreground";
-      default:
-        return "bg-secondary text-secondary-foreground";
+      case "completed": return <FiCheckCircle className="text-emerald-400" />;
+      case "running": return <FiRefreshCw className="text-indigo-400 animate-spin" />;
+      case "failed": return <FiXCircle className="text-red-400" />;
+      default: return <FiClock className="text-gray-400" />;
     }
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-3xl font-bold text-primary">Model Training</h2>
-        <p className="text-muted-foreground">Train custom YOLO models on your datasets</p>
+    <div className="space-y-8 animate-fade-in text-gray-100">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-white to-white/60 bg-clip-text text-transparent">Training Center</h2>
+          <p className="text-muted-foreground mt-1">Configure and monitor GPU training jobs.</p>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Training Configuration */}
-        <Card className="bg-card border-border">
-          <CardHeader>
-            <CardTitle className="text-primary">Training Configuration</CardTitle>
-            <CardDescription>Configure hyperparameters for model training</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Configuration Panel */}
+        <div className="rounded-2xl bg-card/40 backdrop-blur-md border border-white/5 p-6 shadow-xl space-y-6 lg:order-1">
+          <div className="flex items-center gap-3 border-b border-white/5 pb-4">
+            <div className="p-2 bg-purple-500/10 rounded-lg text-purple-400">
+              <FiSettings />
+            </div>
+            <h3 className="font-semibold text-lg">Hyperparameters</h3>
+          </div>
+
+          <div className="space-y-6">
             {/* Dataset Config */}
-            <div className="space-y-2">
-              <Label htmlFor="config-upload">Dataset YAML Config</Label>
-              <div className="border-2 border-dashed border-border rounded-lg p-6 text-center hover:border-primary transition-colors cursor-pointer">
+            <div className="space-y-3">
+              <Label className="text-xs uppercase tracking-wider text-muted-foreground">Dataset Config (YAML)</Label>
+              <div className="relative border-2 border-dashed border-white/10 rounded-xl p-6 text-center hover:border-purple-500/50 hover:bg-purple-500/5 transition-all cursor-pointer group">
                 <Input
                   id="config-upload"
                   type="file"
@@ -168,278 +158,141 @@ export default function TrainingTab() {
                   onChange={handleConfigChange}
                   className="hidden"
                 />
-                <label htmlFor="config-upload" className="cursor-pointer">
+                <label htmlFor="config-upload" className="cursor-pointer block w-full h-full">
                   {configFile ? (
-                    <div className="space-y-2">
-                      <FiCheckCircle className="mx-auto text-3xl text-primary" />
-                      <p className="text-sm font-medium">{configFile.name}</p>
+                    <div className="flex items-center justify-center gap-3 text-emerald-400">
+                      <FiCheckCircle className="text-xl" />
+                      <span className="font-medium text-emerald-100">{configFile.name}</span>
                     </div>
                   ) : (
-                    <div className="space-y-2">
-                      <FiUpload className="mx-auto text-3xl text-muted-foreground" />
-                      <p className="text-sm font-medium">Upload YAML config</p>
-                      <p className="text-xs text-muted-foreground">data.yaml with train/val paths</p>
+                    <div className="text-muted-foreground group-hover:text-purple-300 transition-colors">
+                      <FiUpload className="text-2xl mx-auto mb-2" />
+                      <span className="text-sm">Click to upload data.yaml</span>
                     </div>
                   )}
                 </label>
               </div>
             </div>
 
-            {/* Base Model */}
-            <div className="space-y-2">
-              <Label htmlFor="base-model">Base Model</Label>
-              <Select value={selectedModel} onValueChange={setSelectedModel}>
-                <SelectTrigger id="base-model" className="bg-background border-border">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="yolov8n.pt">YOLOv8 Nano</SelectItem>
-                  <SelectItem value="yolov8s.pt">YOLOv8 Small</SelectItem>
-                  <SelectItem value="yolov8m.pt">YOLOv8 Medium</SelectItem>
-                  <SelectItem value="yolov8l.pt">YOLOv8 Large</SelectItem>
-                  <SelectItem value="yolov8x.pt">YOLOv8 XLarge</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-xs uppercase tracking-wider text-muted-foreground">Base Model</Label>
+                <Select value={selectedModel} onValueChange={setSelectedModel}>
+                  <SelectTrigger className="bg-black/20 border-white/10"><SelectValue /></SelectTrigger>
+                  <SelectContent className="bg-slate-900 border-white/10 text-gray-200">
+                    {['n', 's', 'm', 'l', 'x'].map(size => (
+                      <SelectItem key={size} value={`yolov8${size}.pt`}>YOLOv8 {size.toUpperCase()}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs uppercase tracking-wider text-muted-foreground">Epochs</Label>
+                <Input
+                  type="number"
+                  value={epochs}
+                  onChange={e => setEpochs(e.target.value)}
+                  className="bg-black/20 border-white/10"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs uppercase tracking-wider text-muted-foreground">Batch Size</Label>
+                <Select value={batchSize.toString()} onValueChange={(v) => setBatchSize(parseInt(v))}>
+                  <SelectTrigger className="bg-black/20 border-white/10"><SelectValue /></SelectTrigger>
+                  <SelectContent className="bg-slate-900 border-white/10 text-gray-200">
+                    {[8, 16, 32, 64].map(bs => <SelectItem key={bs} value={bs.toString()}>{bs}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs uppercase tracking-wider text-muted-foreground">Img Size</Label>
+                <Select value={imgSize.toString()} onValueChange={(v) => setImgSize(parseInt(v))}>
+                  <SelectTrigger className="bg-black/20 border-white/10"><SelectValue /></SelectTrigger>
+                  <SelectContent className="bg-slate-900 border-white/10 text-gray-200">
+                    {[320, 640, 1280].map(s => <SelectItem key={s} value={s.toString()}>{s}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
-            {/* Epochs */}
-            <div className="space-y-2">
-              <Label htmlFor="epochs">Epochs: {epochs}</Label>
-              <Input
-                id="epochs"
-                type="number"
-                min="1"
-                max="500"
-                value={epochs}
-                onChange={(e) => setEpochs(e.target.value)}
-                className="bg-background border-border"
-              />
-            </div>
-
-            {/* Batch Size */}
-            <div className="space-y-2">
-              <Label htmlFor="batch-size">Batch Size: {batchSize}</Label>
-              <Select value={batchSize.toString()} onValueChange={(v) => setBatchSize(parseInt(v))}>
-                <SelectTrigger id="batch-size" className="bg-background border-border">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="8">8</SelectItem>
-                  <SelectItem value="16">16</SelectItem>
-                  <SelectItem value="32">32</SelectItem>
-                  <SelectItem value="64">64</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Image Size */}
-            <div className="space-y-2">
-              <Label htmlFor="img-size">Image Size: {imgSize}</Label>
-              <Select value={imgSize.toString()} onValueChange={(v) => setImgSize(parseInt(v))}>
-                <SelectTrigger id="img-size" className="bg-background border-border">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="320">320</SelectItem>
-                  <SelectItem value="640">640</SelectItem>
-                  <SelectItem value="1280">1280</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Start Button */}
             <Button
               onClick={handleStartTraining}
               disabled={!configFile || isTraining}
-              className="w-full bg-primary hover:bg-primary/90"
-              size="lg"
+              className="w-full h-12 bg-purple-600 hover:bg-purple-500 text-white font-semibold shadow-lg shadow-purple-500/20 border-0 rounded-xl transition-all hover:scale-[1.02]"
             >
-              {isTraining ? (
-                <>
-                  <FiRefreshCw className="mr-2 animate-spin" />
-                  Starting Training...
-                </>
-              ) : (
-                <>
-                  <FiPlay className="mr-2" />
-                  Start Training
-                </>
-              )}
+              {isTraining ? <FiRefreshCw className="mr-2 animate-spin" /> : <FiPlay className="mr-2" />}
+              {isTraining ? "Initializing Cluster..." : "Start Training Run"}
             </Button>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
-        {/* Training Jobs */}
-        <Card className="bg-card border-border">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-primary">Training Jobs</CardTitle>
-                <CardDescription>Monitor active and completed training jobs</CardDescription>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={fetchTrainingJobs}
-                className="border-border"
-                disabled={loading}
-              >
-                <FiRefreshCw className={`mr-2 ${loading ? 'animate-spin' : ''}`} />
-                Refresh
-              </Button>
+        {/* Job Monitor (Terminal Style) */}
+        <div className="rounded-2xl bg-[#0d0d11] border border-white/10 shadow-2xl overflow-hidden flex flex-col h-[600px] lg:order-2">
+          <div className="bg-white/5 px-4 py-3 border-b border-white/5 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <FiTerminal className="text-gray-400" />
+              <span className="text-sm font-mono text-gray-300">cluster_monitor ~ jobs</span>
             </div>
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-              <div className="flex flex-col items-center justify-center py-12">
-                <FiRefreshCw className="text-4xl mb-4 animate-spin text-primary" />
-                <p className="text-sm text-muted-foreground">Loading training jobs...</p>
-              </div>
-            ) : trainingJobs.length > 0 ? (
-              <div className="space-y-4">
-                {trainingJobs.map((job) => {
-                  const jobId = job.job_id || job.id || 'unknown';
-                  return (
-                    <div
-                      key={jobId}
-                      className="p-4 bg-background rounded-lg border border-border hover:border-primary transition-colors"
-                    >
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="flex items-center gap-3 flex-1">
-                          <div className="text-2xl">
-                            {getStatusIcon(job.status)}
-                          </div>
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-1">
-                              <p className="font-medium text-sm">Job: {jobId.substring(0, 12)}</p>
-                              <Badge className={`${getStatusColor(job.status)} text-xs`}>
-                                {job.status || 'pending'}
-                              </Badge>
-                              {job.strict_mode && (
-                                <Badge className="bg-yellow-500/20 text-yellow-500 border-yellow-500/30 text-xs">
-                                  Strict Mode
-                                </Badge>
-                              )}
-                            </div>
-                            {job.dataset_id && (
-                              <p className="text-xs text-muted-foreground">
-                                Dataset: {job.dataset_id.substring(0, 8)}...
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex gap-2">
-                          {job.status === "completed" && job.model_path && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => {
-                                alert(`Model saved at: ${job.model_path}\n\nYou can download it from the Models tab.`);
-                              }}
-                              className="text-primary hover:text-primary"
-                            >
-                              <FiEye className="text-sm" />
-                            </Button>
-                          )}
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDeleteJob(jobId)}
-                            className="text-destructive hover:text-destructive"
-                          >
-                            <FiTrash2 className="text-sm" />
-                          </Button>
-                        </div>
-                      </div>
+            <Button onClick={fetchTrainingJobs} variant="ghost" size="icon" className="h-6 w-6 text-gray-400 hover:text-white">
+              <FiRefreshCw className={loading ? "animate-spin" : ""} />
+            </Button>
+          </div>
 
-                      {job.status === "running" && (
-                        <div className="space-y-2 mb-3">
-                          <div className="flex items-center justify-between text-xs text-muted-foreground">
-                            <span>Progress</span>
-                            <span>{job.progress || 0}%</span>
-                          </div>
-                          <Progress value={job.progress || 0} className="h-2" />
-                          {job.current_epoch && job.config?.epochs && (
-                            <p className="text-xs text-muted-foreground text-center">
-                              Epoch {job.current_epoch} / {job.config.epochs}
-                            </p>
-                          )}
-                        </div>
-                      )}
-
-                      <div className="mt-3 space-y-2">
-                        <div className="grid grid-cols-2 gap-2 text-xs">
-                          <div>
-                            <span className="font-medium text-muted-foreground">Epochs: </span>
-                            <span className="text-foreground">{job.config?.epochs || job.epochs || "N/A"}</span>
-                          </div>
-                          <div>
-                            <span className="font-medium text-muted-foreground">Batch Size: </span>
-                            <span className="text-foreground">{job.config?.batch_size || job.batch_size || "N/A"}</span>
-                          </div>
-                          <div>
-                            <span className="font-medium text-muted-foreground">Image Size: </span>
-                            <span className="text-foreground">{job.config?.img_size || job.img_size || "N/A"}</span>
-                          </div>
-                          <div>
-                            <span className="font-medium text-muted-foreground">Model: </span>
-                            <span className="text-foreground">{job.config?.model_name || job.model_name || "N/A"}</span>
-                          </div>
-                        </div>
-                        
-                        {job.metrics && Object.keys(job.metrics).length > 0 && (
-                          <div className="mt-3 pt-3 border-t border-border">
-                            <p className="text-xs font-medium text-muted-foreground mb-2">Metrics:</p>
-                            <div className="grid grid-cols-2 gap-2 text-xs">
-                              {job.metrics.map50 !== undefined && (
-                                <div>
-                                  <span className="text-muted-foreground">mAP50: </span>
-                                  <span className="text-primary font-medium">{(job.metrics.map50 * 100).toFixed(2)}%</span>
-                                </div>
-                              )}
-                              {job.metrics['map50-95'] !== undefined && (
-                                <div>
-                                  <span className="text-muted-foreground">mAP50-95: </span>
-                                  <span className="text-primary font-medium">{(job.metrics['map50-95'] * 100).toFixed(2)}%</span>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        )}
-                        
-                        {job.error && (
-                          <div className="mt-3 pt-3 border-t border-border">
-                            <p className="text-xs text-destructive">
-                              <span className="font-medium">Error: </span>
-                              {job.error}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+          <div className="flex-1 overflow-y-auto p-4 space-y-4 font-mono text-sm custom-scrollbar">
+            {loading && trainingJobs.length === 0 ? (
+              <div className="text-gray-500 animate-pulse">connecting to cluster...</div>
+            ) : trainingJobs.length === 0 ? (
+              <div className="text-gray-600 italic">// No active jobs found. Start a new run to see logs here.</div>
             ) : (
-              <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-                <FiCpu className="text-6xl mb-4 opacity-20" />
-                <p className="text-sm">No training jobs yet</p>
-                <p className="text-xs mt-1">Start a new training job to see it here</p>
-                <Button
-                  onClick={fetchTrainingJobs}
-                  variant="outline"
-                  size="sm"
-                  className="mt-4 border-border"
-                >
-                  <FiRefreshCw className="mr-2" />
-                  Refresh
-                </Button>
-              </div>
+              trainingJobs.map((job) => (
+                <div key={job.job_id} className="border-l-2 border-white/10 pl-4 py-1 hover:border-purple-500/50 transition-colors group">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-purple-400 font-bold flex items-center gap-2">
+                      {getStatusIcon(job.status)}
+                      JOB-{job.job_id?.substring(0, 6)}
+                    </span>
+                    <span className="text-xs text-gray-500">
+                      {job.config?.model_name} • {job.config?.epochs}ep
+                    </span>
+                  </div>
+
+                  {job.status === "running" && (
+                    <div className="space-y-2 mb-3">
+                      <div className="flex justify-between text-xs text-gray-400">
+                        <span>Progress</span>
+                        <span>{job.progress || 0}%</span>
+                      </div>
+                      <Progress value={job.progress || 0} className="h-1 bg-white/10" indicatorClassName="bg-purple-500" />
+                    </div>
+                  )}
+
+                  {job.metrics && (
+                    <div className="grid grid-cols-2 gap-4 text-xs text-gray-400 mt-2 bg-white/5 p-2 rounded">
+                      <div>mAP50: <span className="text-white">{(job.metrics.map50 * 100).toFixed(1)}%</span></div>
+                      <div>mAP50-95: <span className="text-white">{(job.metrics["map50-95"] * 100).toFixed(1)}%</span></div>
+                    </div>
+                  )}
+
+                  <div className="flex gap-2 mt-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {job.status === "completed" && (
+                      <Badge variant="outline" className="text-xs cursor-pointer hover:bg-white/10 border-white/20">
+                        <FiEye className="mr-1" /> View Artifacts
+                      </Badge>
+                    )}
+                    <Badge
+                      variant="destructive"
+                      className="text-xs cursor-pointer hover:bg-destructive/80"
+                      onClick={() => handleDeleteJob(job.job_id)}
+                    >
+                      <FiTrash2 className="mr-1" /> Terminate
+                    </Badge>
+                  </div>
+                </div>
+              ))
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
     </div>
   );
 }
-

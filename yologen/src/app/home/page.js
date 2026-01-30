@@ -5,231 +5,203 @@ import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { FiZap, FiArrowRight, FiDatabase, FiCpu, FiImage, FiActivity, FiLogOut, FiCheckCircle, FiBox, FiLayers } from "react-icons/fi";
+import {
+  FiZap,
+  FiArrowRight,
+  FiDatabase,
+  FiCpu,
+  FiImage,
+  FiActivity,
+  FiCheckCircle,
+  FiBox,
+  FiCode
+} from "react-icons/fi";
+import { cn } from "@/lib/utils";
 
 export default function HomePage() {
   const router = useRouter();
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
 
   const features = [
     {
       icon: FiDatabase,
       title: "Dataset Management",
-      description: "Organize, version, and collaborate on your computer vision datasets efficiently."
+      description: "Organize, version, and collaborate on your computer vision datasets with enterprise-grade lineage tracking.",
+      color: "text-blue-400 bg-blue-400/10 border-blue-400/20"
     },
     {
       icon: FiImage,
       title: "Smart Annotation",
-      description: "Accelerate labeling with AI-assisted tools and intuitive interfaces."
+      description: "Accelerate labeling with AI-assisted cursors, magic hulls, and auto-segmentation tools.",
+      color: "text-purple-400 bg-purple-400/10 border-purple-400/20"
     },
     {
       icon: FiCpu,
-      title: "Model Training",
-      description: "Train custom YOLO models on optimized cloud infrastructure with one click."
+      title: "One-Click Training",
+      description: "Train YOLOv8-v10 models on our GPU cluster. No configuration hell, just results.",
+      color: "text-emerald-400 bg-emerald-400/10 border-emerald-400/20"
     },
     {
       icon: FiActivity,
-      title: "Real-time Inference",
-      description: "Deploy and test your models instantly with our low-latency inference API."
+      title: "Instant Inference",
+      description: "Deploy models to valid endpoints in seconds. High throughput, low latency API ready for production.",
+      color: "text-amber-400 bg-amber-400/10 border-amber-400/20"
     }
   ];
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col font-sans">
+    <div className="min-h-screen bg-black text-white selection:bg-indigo-500/30 selection:text-indigo-200 font-sans overflow-hidden">
+      {/* Background Ambience */}
+      <div className="fixed inset-0 z-0 pointer-events-none">
+        <div className="absolute top-[-10%] left-[20%] w-[500px] h-[500px] rounded-full bg-indigo-600/20 blur-[120px] animate-pulse-glow" />
+        <div className="absolute bottom-[-10%] right-[10%] w-[600px] h-[600px] rounded-full bg-violet-600/10 blur-[120px] animate-mesh" />
+        <div className="absolute top-[40%] left-[-10%] w-[400px] h-[400px] rounded-full bg-blue-600/10 blur-[100px]" />
+      </div>
+
       {/* Header */}
-      <header className="border-b border-border/40 bg-background/80 backdrop-blur-md sticky top-0 z-50">
-        <div className="container mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity" onClick={() => router.push("/")}>
-            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-              <FiZap className="text-primary-foreground text-lg" />
+      <header className="fixed top-0 w-full z-50 border-b border-white/5 bg-black/50 backdrop-blur-xl">
+        <div className="container mx-auto px-6 h-20 flex items-center justify-between">
+          <div className="flex items-center gap-3 cursor-pointer group" onClick={() => router.push("/")}>
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-lg shadow-indigo-500/20 group-hover:shadow-indigo-500/40 transition-all duration-300">
+              <FiZap className="text-white text-xl" />
             </div>
-            <span className="text-lg font-semibold tracking-tight">YOLO Gen</span>
+            <span className="text-xl font-bold tracking-tight bg-gradient-to-r from-white to-white/60 bg-clip-text text-transparent">
+              Nebula
+            </span>
           </div>
 
-          <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-muted-foreground">
-            <a href="#features" className="hover:text-foreground transition-colors">Features</a>
-            <a href="#workflow" className="hover:text-foreground transition-colors">How it Works</a>
-            <a href="#" className="hover:text-foreground transition-colors">Pricing</a>
-          </nav>
-
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-6">
             {user ? (
-              <>
-                <Badge variant="outline" className="hidden sm:flex border-border/50 font-normal">
-                  {user.username}
-                </Badge>
-                <Button onClick={() => router.push("/dashboard")} size="sm">
-                  Dashboard
+              <div className="flex items-center gap-4">
+                <Button
+                  onClick={() => router.push("/dashboard")}
+                  className="bg-white text-black hover:bg-white/90 rounded-full px-6 font-semibold shadow-[0_0_20px_rgba(255,255,255,0.3)] transition-all hover:shadow-[0_0_30px_rgba(255,255,255,0.5)]"
+                >
+                  Go to Dashboard
                 </Button>
-                <Button onClick={logout} variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
-                  <FiLogOut className="mr-2 h-4 w-4" /> Logout
-                </Button>
-              </>
+              </div>
             ) : (
-              <>
-                <Button onClick={() => router.push("/login")} variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
-                  Login
+              <div className="flex items-center gap-4">
+                <Button
+                  variant="ghost"
+                  onClick={() => router.push("/login")}
+                  className="text-gray-400 hover:text-white"
+                >
+                  Sign In
                 </Button>
-                <Button onClick={() => router.push("/register")} size="sm">
+                <Button
+                  onClick={() => router.push("/register")}
+                  className="bg-white text-black hover:bg-white/90 rounded-full px-6 font-semibold"
+                >
                   Get Started
                 </Button>
-              </>
+              </div>
             )}
           </div>
         </div>
       </header>
 
-      <main className="flex-1">
+      <main className="relative z-10 pt-32">
         {/* Hero Section */}
-        <section className="py-24 md:py-32 px-6 border-b border-border/40 bg-muted/10">
-          <div className="container mx-auto max-w-6xl">
-            <div className="flex flex-col lg:flex-row items-center gap-16">
-              <div className="flex-1 space-y-8 text-center lg:text-left">
-                <Badge variant="secondary" className="rounded-full px-4 py-1 text-sm font-medium bg-primary/10 text-primary hover:bg-primary/20 border-primary/20">
-                  v2.0 is now live
-                </Badge>
+        <section className="container mx-auto px-6 py-20 lg:py-32">
+          <div className="flex flex-col items-center text-center max-w-4xl mx-auto space-y-8 animate-fade-in">
+            <Badge variant="outline" className="rounded-full px-4 py-1.5 border-white/10 bg-white/5 text-sm backdrop-blur-md hover:bg-white/10 transition-colors">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 mr-2 animate-pulse" />
+              v2.0 Model Engine Live
+            </Badge>
 
-                <h1 className="text-5xl md:text-7xl font-bold tracking-tight leading-[1.1]">
-                  Train Custom <br className="hidden lg:block" />
-                  <span className="text-primary">Vision Models</span>
-                </h1>
+            <h1 className="text-5xl md:text-7xl font-bold tracking-tight leading-tight">
+              The Next Generation of <br />
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 animate-gradient-x">
+                Computer Vision
+              </span>
+            </h1>
 
-                <p className="text-xl text-muted-foreground leading-relaxed max-w-2xl mx-auto lg:mx-0">
-                  The all-in-one platform to create, train, and deploy YOLO models. Streamline your workflow from raw data to API.
-                </p>
+            <p className="text-xl text-gray-400 max-w-2xl leading-relaxed">
+              Build, train, and deploy state-of-the-art computer vision models in minutes.
+              Enterprise-grade infrastructure with a beautiful developer experience.
+            </p>
 
-                <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4">
-                  <Button
-                    onClick={() => router.push(user ? '/dashboard' : '/register')}
-                    size="lg"
-                    className="h-12 px-8 text-base rounded-md w-full sm:w-auto shadow-md"
-                  >
-                    Start Building Free
-                    <FiArrowRight className="ml-2 h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="lg"
-                    className="h-12 px-8 text-base rounded-md w-full sm:w-auto bg-background"
-                  >
-                    View Documentation
-                  </Button>
-                </div>
+            <div className="flex flex-col sm:flex-row items-center gap-4 pt-4">
+              <Button
+                size="lg"
+                onClick={() => router.push(user ? '/dashboard' : '/register')}
+                className="h-14 px-8 rounded-full text-lg bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-500/25 transition-all hover:scale-105"
+              >
+                Start Building Free
+                <FiArrowRight className="ml-2" />
+              </Button>
 
-                <div className="pt-8 flex items-center justify-center lg:justify-start gap-8 text-muted-foreground text-sm">
-                  <div className="flex items-center gap-2">
-                    <FiCheckCircle className="text-primary" />
-                    <span>No credit card required</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <FiCheckCircle className="text-primary" />
-                    <span>Free tier available</span>
-                  </div>
-                </div>
-              </div>
+              <Button
+                variant="outline"
+                size="lg"
+                className="h-14 px-8 rounded-full text-lg border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 text-white backdrop-blur-sm"
+              >
+                <FiCode className="mr-2" />
+                View API Docs
+              </Button>
+            </div>
 
-              <div className="flex-1 w-full max-w-[600px] lg:max-w-none">
-                <div className="relative rounded-xl overflow-hidden border border-border bg-card shadow-2xl">
-                  {/* Simple Preview UI */}
-                  <div className="h-10 bg-muted border-b border-border flex items-center px-4 gap-2">
-                    <div className="w-3 h-3 rounded-full bg-red-400/80"></div>
-                    <div className="w-3 h-3 rounded-full bg-yellow-400/80"></div>
-                    <div className="w-3 h-3 rounded-full bg-green-400/80"></div>
-                  </div>
-                  <div className="aspect-[4/3] bg-muted/30 flex items-center justify-center relative group">
-                    <img
-                      src="/dashboard_preview.svg"
-                      alt="Platform Interface"
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        e.target.style.display = 'none';
-                        e.target.nextSibling.style.display = 'flex';
-                      }}
-                    />
-                    <div className="hidden absolute inset-0 flex-col items-center justify-center text-muted-foreground">
-                      <FiLayers className="text-6xl mb-4 opacity-20" />
-                      <span className="text-sm font-medium opacity-50">Dashboard Preview</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
+            {/* Hero Image / Preview */}
+            <div className="mt-20 relative w-full aspect-video max-w-5xl rounded-2xl border border-white/10 overflow-hidden shadow-2xl shadow-indigo-500/10 group">
+              <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent z-10" />
+              <div className="absolute inset-0 bg-indigo-500/5 group-hover:bg-indigo-500/10 transition-colors duration-500" />
+              <img
+                src="/dashboard_preview.svg"
+                alt="Dashboard Interface"
+                className="w-full h-full object-cover opacity-90 transition-transform duration-700 group-hover:scale-105"
+                onError={(e) => {
+                  e.target.style.display = 'none';
+                  e.target.parentNode.innerHTML += '<div class="flex items-center justify-center w-full h-full bg-white/5 text-white/20"><svg class="w-24 h-24" fill="currentColor" viewBox="0 0 24 24"><path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg></div>';
+                }}
+              />
             </div>
           </div>
         </section>
 
-        {/* Features Grid */}
-        <section id="features" className="py-24 px-6">
-          <div className="container mx-auto max-w-6xl">
-            <div className="text-center mb-16 max-w-3xl mx-auto space-y-4">
-              <h2 className="text-3xl font-bold tracking-tight">Everything you need to ship</h2>
-              <p className="text-muted-foreground text-lg">
-                Stop stitching together disparate tools. Get a complete pipeline integrated into a single workflow.
-              </p>
-            </div>
-
-            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
-              {features.map((feature, index) => {
-                const Icon = feature.icon;
-                return (
-                  <Card key={index} className="bg-card border-border/50 hover:shadow-lg transition-all duration-200">
-                    <CardContent className="p-6">
-                      <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center mb-4 text-primary">
-                        <Icon className="text-2xl" />
-                      </div>
-                      <h3 className="text-lg font-semibold mb-2">{feature.title}</h3>
-                      <p className="text-muted-foreground text-sm leading-relaxed">{feature.description}</p>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
+        {/* Feature Grid */}
+        <section className="container mx-auto px-6 py-24 border-t border-white/5">
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {features.map((feature, idx) => (
+              <div
+                key={idx}
+                className="p-6 rounded-2xl border border-white/5 bg-white/5 backdrop-blur-sm hover:bg-white/10 transition-colors group"
+              >
+                <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center text-xl mb-4 border transition-transform group-hover:scale-110 duration-300", feature.color)}>
+                  <feature.icon />
+                </div>
+                <h3 className="text-xl font-bold mb-2 text-gray-100">{feature.title}</h3>
+                <p className="text-sm text-gray-400 leading-relaxed">{feature.description}</p>
+              </div>
+            ))}
           </div>
         </section>
 
-        {/* Workflow Steps */}
-        <section id="workflow" className="py-24 px-6 bg-muted/30 border-t border-border/40">
-          <div className="container mx-auto max-w-4xl">
+        {/* Workflow Section */}
+        <section className="py-24 bg-white/5 border-t border-white/5">
+          <div className="container mx-auto px-6">
             <div className="text-center mb-16">
-              <Badge variant="outline" className="mb-4 bg-background">Workflow</Badge>
-              <h2 className="text-3xl md:text-4xl font-bold tracking-tight">From Image to Inference</h2>
+              <h2 className="text-3xl md:text-5xl font-bold mb-6">Workflow Simplified</h2>
+              <p className="text-gray-400 max-w-2xl mx-auto text-lg">From raw data to production API in four simple steps.</p>
             </div>
 
-            <div className="space-y-12">
+            <div className="grid md:grid-cols-4 gap-8 relative">
+              {/* Connecting Line (Desktop) */}
+              <div className="hidden md:block absolute top-8 left-1/2 -translate-x-1/2 w-[80%] h-[1px] bg-gradient-to-r from-transparent via-indigo-500/50 to-transparent" />
+
               {[
-                {
-                  step: "01",
-                  title: "Upload & Organize",
-                  desc: "Drag and drop your raw images. We verify formats and check for duplicates automatically.",
-                  icon: FiBox
-                },
-                {
-                  step: "02",
-                  title: "Annotate with AI",
-                  desc: "Use our Smart Hulls and Magic Wand tools to label objects 10x faster than manual bounding boxes.",
-                  icon: FiImage
-                },
-                {
-                  step: "03",
-                  title: "One-Click Training",
-                  desc: "Select a base model (YOLOv8, v9, v10), configure epochs, and hit train. We handle the GPUs.",
-                  icon: FiCpu
-                },
-                {
-                  step: "04",
-                  title: "Deploy via API",
-                  desc: "Get a dedicated endpoint for your model. Send images and get JSON predictions in milliseconds.",
-                  icon: FiActivity
-                }
+                { step: "01", title: "Upload", icon: FiBox },
+                { step: "02", title: "Annotate", icon: FiImage },
+                { step: "03", title: "Train", icon: FiCpu },
+                { step: "04", title: "Deploy", icon: FiActivity },
               ].map((item, i) => (
-                <div key={i} className="flex flex-col md:flex-row gap-8 items-start md:items-center p-6 rounded-xl bg-background border border-border/50 shadow-sm">
-                  <div className="flex-shrink-0 w-16 h-16 rounded-xl bg-primary/5 flex items-center justify-center text-xl font-bold text-primary border border-primary/10">
-                    {item.step}
+                <div key={i} className="relative flex flex-col items-center text-center group">
+                  <div className="w-16 h-16 rounded-full bg-black border border-white/10 flex items-center justify-center text-2xl text-indigo-400 z-10 shadow-xl shadow-black group-hover:border-indigo-500/50 group-hover:text-indigo-300 transition-all duration-300">
+                    <item.icon />
                   </div>
-                  <div className="flex-1">
-                    <h3 className="text-xl font-bold mb-2">{item.title}</h3>
-                    <p className="text-muted-foreground leading-relaxed">
-                      {item.desc}
-                    </p>
+                  <div className="mt-6">
+                    <span className="text-xs font-mono text-indigo-500 mb-2 block">{item.step}</span>
+                    <h3 className="text-xl font-bold">{item.title}</h3>
                   </div>
                 </div>
               ))}
@@ -237,36 +209,20 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* CTA */}
-        <section className="py-24 px-6 border-t border-border/40">
-          <div className="container mx-auto max-w-4xl text-center bg-primary text-primary-foreground rounded-3xl p-12 shadow-xl">
-            <h2 className="text-3xl font-bold mb-6">Ready to build your model?</h2>
-            <p className="text-primary-foreground/80 text-lg mb-8 max-w-xl mx-auto">
-              Join thousands of developers building the future of computer vision today.
+        {/* Footer */}
+        <footer className="border-t border-white/5 py-12 bg-black">
+          <div className="container mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-6">
+            <div className="flex items-center gap-2 text-gray-400">
+              <FiZap className="text-indigo-500" />
+              <span className="font-semibold text-gray-200">Nebula</span>
+              <span className="text-xs px-2 py-0.5 rounded bg-white/10 text-white">v2.1.0</span>
+            </div>
+            <p className="text-sm text-gray-600">
+              &copy; {new Date().getFullYear()} YOLO Generator Inc. All systems normal.
             </p>
-            <Button
-              onClick={() => router.push(user ? '/dashboard' : '/register')}
-              size="lg"
-              className="h-12 px-10 text-lg bg-background text-foreground hover:bg-background/90 font-semibold"
-            >
-              Get Started for Free
-            </Button>
           </div>
-        </section>
+        </footer>
       </main>
-
-      {/* Footer */}
-      <footer className="border-t border-border/40 bg-muted/10 py-12 px-6">
-        <div className="container mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
-          <div className="flex items-center gap-2 opacity-80">
-            <FiZap className="text-primary" />
-            <span className="font-bold text-sm">YOLO Gen</span>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            &copy; {new Date().getFullYear()} YOLO Generator Inc. All rights reserved.
-          </p>
-        </div>
-      </footer>
     </div>
   );
 }
