@@ -172,3 +172,6 @@ This project is licensed under the MIT License.
 - Ultralytics for YOLOv8
 - shadcn/ui for beautiful components
 - FastAPI for the backend framework
+
+## Last Updated
+- 2026-02-01

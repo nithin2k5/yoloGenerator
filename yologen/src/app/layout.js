@@ -17,6 +17,7 @@ export const metadata = {
   },
 };
 
+// Main root layout with providers
 export default function RootLayout({ children }) {
   return (
     <html lang="en" className="dark">
