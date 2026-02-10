@@ -1,58 +1,64 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Progress } from "@/components/ui/progress";
-import { Badge } from "@/components/ui/badge";
-import {
-  FiUpload,
-  FiPlay,
-  FiRefreshCw,
-  FiCpu,
-  FiCheckCircle,
-  FiXCircle,
-  FiClock,
-  FiTrash2,
-  FiEye,
-  FiTerminal,
-  FiSettings
-} from "react-icons/fi";
 import { cn } from "@/lib/utils";
+import { toast } from 'sonner';
+import {
+  FiUpload, FiPlay, FiSquare, FiRefreshCw, FiTerminal,
+  FiCheckCircle, FiXCircle, FiClock, FiCpu, FiTrendingUp
+} from "react-icons/fi";
 
 export default function TrainingTab() {
-  const [configFile, setConfigFile] = useState(null);
-  const [selectedModel, setSelectedModel] = useState("yolov8n.pt");
-  const [epochs, setEpochs] = useState(100);
-  const [batchSize, setBatchSize] = useState(16);
-  const [imgSize, setImgSize] = useState(640);
-  const [isTraining, setIsTraining] = useState(false);
-  const [trainingJobs, setTrainingJobs] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [config, setConfig] = useState({
+    model_name: "yolov8n",
+    epochs: 50,
+    batch_size: 16,
+    img_size: 640,
+    dataset_yaml: null,
+    dataset_yaml_name: ""
+  });
 
-  const handleConfigChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setConfigFile(file);
+  const [jobs, setJobs] = useState([]);
+  const [isTraining, setIsTraining] = useState(false);
+  const logEndRef = useRef(null);
+
+  useEffect(() => {
+    fetchJobs();
+    const interval = setInterval(fetchJobs, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const fetchJobs = async () => {
+    try {
+      const response = await fetch("http://localhost:8000/api/training/jobs");
+      if (response.ok) {
+        const data = await response.json();
+        setJobs(data.jobs || []);
+      }
+    } catch (error) {
+      console.error("Error fetching jobs:", error);
     }
   };
 
   const handleStartTraining = async () => {
-    if (!configFile) {
-      alert("Please upload a dataset YAML configuration file");
+    if (!config.dataset_yaml) {
+      toast.error("Please upload a dataset YAML configuration file.");
       return;
     }
 
     setIsTraining(true);
     const formData = new FormData();
-    formData.append("dataset_yaml", configFile);
-    formData.append("epochs", epochs.toString());
-    formData.append("batch_size", batchSize.toString());
-    formData.append("img_size", imgSize.toString());
-    formData.append("model_name", selectedModel);
+    formData.append("dataset_yaml", config.dataset_yaml);
+    formData.append("model_name", config.model_name);
+    formData.append("epochs", config.epochs);
+    formData.append("batch_size", config.batch_size);
+    formData.append("img_size", config.img_size);
 
     try {
       const response = await fetch("http://localhost:8000/api/training/start", {
@@ -60,70 +66,45 @@ export default function TrainingTab() {
         body: formData
       });
 
-      const data = await response.json();
-
-      if (data.success) {
-        alert(`Training job ${data.job_id} started!`);
-        fetchTrainingJobs();
+      if (response.ok) {
+        const data = await response.json();
+        toast.success(`Training started! Job ID: ${data.job_id}`);
+        fetchJobs();
       } else {
-        alert(`Error: ${data.detail || "Failed to start training"}`);
+        const err = await response.json();
+        toast.error(err.detail || "Failed to start training");
       }
     } catch (error) {
-      console.error("Training error:", error);
-      alert("Error starting training. Check backend connection.");
+      toast.error("Error starting training: " + error.message);
     } finally {
       setIsTraining(false);
     }
   };
 
-  const fetchTrainingJobs = async () => {
+  const handleTerminateJob = async (jobId) => {
     try {
-      setLoading(true);
-      const response = await fetch("http://localhost:8000/api/training/jobs");
+      const response = await fetch(`http://localhost:8000/api/training/terminate/${jobId}`, { method: "POST" });
       if (response.ok) {
-        const data = await response.json();
-        setTrainingJobs(data.jobs || []);
+        toast.success("Training job terminated");
+        fetchJobs();
       } else {
-        setTrainingJobs([]);
+        toast.error("Failed to terminate job");
       }
     } catch (error) {
-      console.error("Error fetching jobs:", error);
-      setTrainingJobs([]);
-    } finally {
-      setLoading(false);
+      toast.error("Error: " + error.message);
     }
   };
 
-  useEffect(() => {
-    fetchTrainingJobs();
-    const interval = setInterval(() => {
-      fetchTrainingJobs();
-    }, 3000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const handleDeleteJob = async (jobId) => {
-    if (!confirm(`Delete training job ${jobId.substring(0, 8)}?`)) return;
-    try {
-      const response = await fetch(`http://localhost:8000/api/training/job/${jobId}`, {
-        method: "DELETE"
-      });
-      if (response.ok) {
-        fetchTrainingJobs();
-      } else {
-        alert("Failed to delete job");
-      }
-    } catch (error) {
-      console.error("Error deleting job:", error);
-    }
-  };
-
-  const getStatusIcon = (status) => {
+  const getStatusBadge = (status) => {
     switch (status) {
-      case "completed": return <FiCheckCircle className="text-emerald-400" />;
-      case "running": return <FiRefreshCw className="text-indigo-400 animate-spin" />;
-      case "failed": return <FiXCircle className="text-red-400" />;
-      default: return <FiClock className="text-gray-400" />;
+      case "running":
+        return <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30"><FiClock className="mr-1" /> Running</Badge>;
+      case "completed":
+        return <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30"><FiCheckCircle className="mr-1" /> Done</Badge>;
+      case "failed":
+        return <Badge className="bg-red-500/20 text-red-400 border-red-500/30"><FiXCircle className="mr-1" /> Failed</Badge>;
+      default:
+        return <Badge variant="outline">{status}</Badge>;
     }
   };
 
@@ -131,166 +112,207 @@ export default function TrainingTab() {
     <div className="space-y-8 animate-fade-in text-gray-100">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-white to-white/60 bg-clip-text text-transparent">Training Center</h2>
-          <p className="text-muted-foreground mt-1">Configure and monitor GPU training jobs.</p>
+          <h2 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-white to-white/60 bg-clip-text text-transparent">Training</h2>
+          <p className="text-muted-foreground mt-1">Configure and monitor model training jobs.</p>
         </div>
+        <Button
+          onClick={fetchJobs}
+          variant="outline"
+          size="sm"
+          className="border-white/10 bg-white/5 hover:bg-white/10"
+        >
+          <FiRefreshCw className="mr-2" /> Refresh
+        </Button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Configuration Panel */}
-        <div className="rounded-2xl bg-card/40 backdrop-blur-md border border-white/5 p-6 shadow-xl space-y-6 lg:order-1">
-          <div className="flex items-center gap-3 border-b border-white/5 pb-4">
-            <div className="p-2 bg-purple-500/10 rounded-lg text-purple-400">
-              <FiSettings />
-            </div>
-            <h3 className="font-semibold text-lg">Hyperparameters</h3>
-          </div>
-
-          <div className="space-y-6">
-            {/* Dataset Config */}
-            <div className="space-y-3">
-              <Label className="text-xs uppercase tracking-wider text-muted-foreground">Dataset Config (YAML)</Label>
-              <div className="relative border-2 border-dashed border-white/10 rounded-xl p-6 text-center hover:border-purple-500/50 hover:bg-purple-500/5 transition-all cursor-pointer group">
-                <Input
-                  id="config-upload"
-                  type="file"
-                  accept=".yaml,.yml"
-                  onChange={handleConfigChange}
-                  className="hidden"
-                />
-                <label htmlFor="config-upload" className="cursor-pointer block w-full h-full">
-                  {configFile ? (
-                    <div className="flex items-center justify-center gap-3 text-emerald-400">
-                      <FiCheckCircle className="text-xl" />
-                      <span className="font-medium text-emerald-100">{configFile.name}</span>
-                    </div>
-                  ) : (
-                    <div className="text-muted-foreground group-hover:text-purple-300 transition-colors">
-                      <FiUpload className="text-2xl mx-auto mb-2" />
-                      <span className="text-sm">Click to upload data.yaml</span>
-                    </div>
-                  )}
-                </label>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Config Panel */}
+        <div className="space-y-6">
+          <Card className="bg-card/40 border-white/5">
+            <CardHeader>
+              <CardTitle className="text-base">Configuration</CardTitle>
+              <CardDescription>Set up your training run.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label className="text-xs uppercase tracking-wider text-muted-foreground">Base Model</Label>
-                <Select value={selectedModel} onValueChange={setSelectedModel}>
-                  <SelectTrigger className="bg-black/20 border-white/10"><SelectValue /></SelectTrigger>
-                  <SelectContent className="bg-slate-900 border-white/10 text-gray-200">
-                    {['n', 's', 'm', 'l', 'x'].map(size => (
-                      <SelectItem key={size} value={`yolov8${size}.pt`}>YOLOv8 {size.toUpperCase()}</SelectItem>
-                    ))}
+                <Label>Dataset Config (YAML)</Label>
+                <div
+                  onClick={() => document.getElementById('yaml-upload')?.click()}
+                  className="border-2 border-dashed border-white/10 rounded-xl p-4 text-center cursor-pointer hover:border-white/20 hover:bg-white/[0.02] transition-all"
+                >
+                  <FiUpload className="mx-auto text-xl text-gray-500 mb-2" />
+                  <p className="text-sm text-gray-400">{config.dataset_yaml_name || "Click to upload .yaml"}</p>
+                  <input
+                    id="yaml-upload"
+                    type="file"
+                    accept=".yaml,.yml"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files[0];
+                      if (file) setConfig({ ...config, dataset_yaml: file, dataset_yaml_name: file.name });
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Model</Label>
+                <Select
+                  value={config.model_name}
+                  onValueChange={v => setConfig({ ...config, model_name: v })}
+                >
+                  <SelectTrigger className="bg-black/30 border-white/10"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="yolov8n">YOLOv8 Nano</SelectItem>
+                    <SelectItem value="yolov8s">YOLOv8 Small</SelectItem>
+                    <SelectItem value="yolov8m">YOLOv8 Medium</SelectItem>
+                    <SelectItem value="yolov8l">YOLOv8 Large</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
-                <Label className="text-xs uppercase tracking-wider text-muted-foreground">Epochs</Label>
-                <Input
-                  type="number"
-                  value={epochs}
-                  onChange={e => setEpochs(e.target.value)}
-                  className="bg-black/20 border-white/10"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs uppercase tracking-wider text-muted-foreground">Batch Size</Label>
-                <Select value={batchSize.toString()} onValueChange={(v) => setBatchSize(parseInt(v))}>
-                  <SelectTrigger className="bg-black/20 border-white/10"><SelectValue /></SelectTrigger>
-                  <SelectContent className="bg-slate-900 border-white/10 text-gray-200">
-                    {[8, 16, 32, 64].map(bs => <SelectItem key={bs} value={bs.toString()}>{bs}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs uppercase tracking-wider text-muted-foreground">Img Size</Label>
-                <Select value={imgSize.toString()} onValueChange={(v) => setImgSize(parseInt(v))}>
-                  <SelectTrigger className="bg-black/20 border-white/10"><SelectValue /></SelectTrigger>
-                  <SelectContent className="bg-slate-900 border-white/10 text-gray-200">
-                    {[320, 640, 1280].map(s => <SelectItem key={s} value={s.toString()}>{s}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
 
-            <Button
-              onClick={handleStartTraining}
-              disabled={!configFile || isTraining}
-              className="w-full h-12 bg-purple-600 hover:bg-purple-500 text-white font-semibold shadow-lg shadow-purple-500/20 border-0 rounded-xl transition-all hover:scale-[1.02]"
-            >
-              {isTraining ? <FiRefreshCw className="mr-2 animate-spin" /> : <FiPlay className="mr-2" />}
-              {isTraining ? "Initializing Cluster..." : "Start Training Run"}
-            </Button>
-          </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-2">
+                  <Label className="text-xs">Epochs</Label>
+                  <Input
+                    type="number"
+                    value={config.epochs}
+                    onChange={e => setConfig({ ...config, epochs: parseInt(e.target.value) || 1 })}
+                    className="bg-black/30 border-white/10"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs">Batch</Label>
+                  <Input
+                    type="number"
+                    value={config.batch_size}
+                    onChange={e => setConfig({ ...config, batch_size: parseInt(e.target.value) || 1 })}
+                    className="bg-black/30 border-white/10"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs">Img Size</Label>
+                  <Select
+                    value={config.img_size.toString()}
+                    onValueChange={v => setConfig({ ...config, img_size: parseInt(v) })}
+                  >
+                    <SelectTrigger className="bg-black/30 border-white/10"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="416">416</SelectItem>
+                      <SelectItem value="640">640</SelectItem>
+                      <SelectItem value="1024">1024</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <Button
+                onClick={handleStartTraining}
+                disabled={isTraining || !config.dataset_yaml}
+                className="w-full bg-indigo-600 hover:bg-indigo-500 text-white"
+              >
+                {isTraining ? <FiRefreshCw className="animate-spin mr-2" /> : <FiPlay className="mr-2" />}
+                {isTraining ? "Starting..." : "Start Training"}
+              </Button>
+            </CardContent>
+          </Card>
         </div>
 
-        {/* Job Monitor (Terminal Style) */}
-        <div className="rounded-2xl bg-[#0d0d11] border border-white/10 shadow-2xl overflow-hidden flex flex-col h-[600px] lg:order-2">
-          <div className="bg-white/5 px-4 py-3 border-b border-white/5 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <FiTerminal className="text-gray-400" />
-              <span className="text-sm font-mono text-gray-300">cluster_monitor ~ jobs</span>
+        {/* Jobs Panel */}
+        <div className="lg:col-span-2 space-y-4">
+          <h3 className="font-bold text-lg flex items-center gap-2">
+            <FiTerminal className="text-gray-500" />
+            Training Jobs
+          </h3>
+
+          {jobs.length === 0 ? (
+            <div className="py-16 text-center rounded-2xl border border-dashed border-white/10 bg-white/[0.02]">
+              <FiCpu className="mx-auto text-3xl text-gray-600 mb-3" />
+              <h3 className="font-semibold mb-1">No Training Jobs</h3>
+              <p className="text-sm text-muted-foreground">Start a training job using the configuration panel.</p>
             </div>
-            <Button onClick={fetchTrainingJobs} variant="ghost" size="icon" className="h-6 w-6 text-gray-400 hover:text-white">
-              <FiRefreshCw className={loading ? "animate-spin" : ""} />
-            </Button>
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-4 space-y-4 font-mono text-sm custom-scrollbar">
-            {loading && trainingJobs.length === 0 ? (
-              <div className="text-gray-500 animate-pulse">connecting to cluster...</div>
-            ) : trainingJobs.length === 0 ? (
-              <div className="text-gray-600 italic">// No active jobs found. Start a new run to see logs here.</div>
-            ) : (
-              trainingJobs.map((job) => (
-                <div key={job.job_id} className="border-l-2 border-white/10 pl-4 py-1 hover:border-purple-500/50 transition-colors group">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-purple-400 font-bold flex items-center gap-2">
-                      {getStatusIcon(job.status)}
-                      JOB-{job.job_id?.substring(0, 6)}
-                    </span>
-                    <span className="text-xs text-gray-500">
-                      {job.config?.model_name} • {job.config?.epochs}ep
-                    </span>
+          ) : (
+            jobs.map((job) => (
+              <div key={job.job_id} className="rounded-2xl bg-card/40 border border-white/5 overflow-hidden">
+                {/* Job Header */}
+                <div className="p-4 flex items-center justify-between border-b border-white/5">
+                  <div className="flex items-center gap-3">
+                    {getStatusBadge(job.status)}
+                    <div>
+                      <p className="text-sm font-medium">{job.config?.model_name || "yolov8n"}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {job.config?.epochs || 0} epochs • Batch {job.config?.batch_size || 16}
+                      </p>
+                    </div>
                   </div>
-
-                  {job.status === "running" && (
-                    <div className="space-y-2 mb-3">
-                      <div className="flex justify-between text-xs text-gray-400">
-                        <span>Progress</span>
-                        <span>{job.progress || 0}%</span>
-                      </div>
-                      <Progress value={job.progress || 0} className="h-1 bg-white/10" indicatorClassName="bg-purple-500" />
-                    </div>
-                  )}
-
-                  {job.metrics && (
-                    <div className="grid grid-cols-2 gap-4 text-xs text-gray-400 mt-2 bg-white/5 p-2 rounded">
-                      <div>mAP50: <span className="text-white">{(job.metrics.map50 * 100).toFixed(1)}%</span></div>
-                      <div>mAP50-95: <span className="text-white">{(job.metrics["map50-95"] * 100).toFixed(1)}%</span></div>
-                    </div>
-                  )}
-
-                  <div className="flex gap-2 mt-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                    {job.status === "completed" && (
-                      <Badge variant="outline" className="text-xs cursor-pointer hover:bg-white/10 border-white/20">
-                        <FiEye className="mr-1" /> View Artifacts
-                      </Badge>
+                  <div className="flex items-center gap-2">
+                    {job.status === "running" && (
+                      <Button
+                        onClick={() => handleTerminateJob(job.job_id)}
+                        variant="ghost"
+                        size="sm"
+                        className="text-red-400 hover:bg-red-400/10"
+                      >
+                        <FiSquare className="mr-1" /> Stop
+                      </Button>
                     )}
-                    <Badge
-                      variant="destructive"
-                      className="text-xs cursor-pointer hover:bg-destructive/80"
-                      onClick={() => handleDeleteJob(job.job_id)}
-                    >
-                      <FiTrash2 className="mr-1" /> Terminate
-                    </Badge>
                   </div>
                 </div>
-              ))
-            )}
-          </div>
+
+                {/* Progress & Metrics */}
+                {(job.progress !== undefined || job.metrics) && (
+                  <div className="p-4 space-y-3">
+                    {job.progress !== undefined && (
+                      <div>
+                        <div className="flex justify-between text-xs mb-1.5">
+                          <span className="text-gray-500">Progress</span>
+                          <span className="font-mono text-indigo-400">{Math.round(job.progress || 0)}%</span>
+                        </div>
+                        <div className="h-2 rounded-full bg-white/5 overflow-hidden">
+                          <div
+                            className="h-full rounded-full bg-gradient-to-r from-indigo-600 to-indigo-400 transition-all duration-500"
+                            style={{ width: `${job.progress || 0}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {job.metrics && (
+                      <div className="grid grid-cols-3 gap-4 pt-2">
+                        {job.metrics.loss !== undefined && (
+                          <div className="text-center p-2 rounded-lg bg-white/[0.03]">
+                            <p className="text-[10px] text-gray-500 uppercase">Loss</p>
+                            <p className="text-sm font-mono text-amber-400">{Number(job.metrics.loss).toFixed(4)}</p>
+                          </div>
+                        )}
+                        {job.metrics.mAP50 !== undefined && (
+                          <div className="text-center p-2 rounded-lg bg-white/[0.03]">
+                            <p className="text-[10px] text-gray-500 uppercase">mAP@50</p>
+                            <p className="text-sm font-mono text-emerald-400">{Number(job.metrics.mAP50).toFixed(3)}</p>
+                          </div>
+                        )}
+                        {job.metrics.epoch !== undefined && (
+                          <div className="text-center p-2 rounded-lg bg-white/[0.03]">
+                            <p className="text-[10px] text-gray-500 uppercase">Epoch</p>
+                            <p className="text-sm font-mono text-blue-400">{job.metrics.epoch}</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Log Output */}
+                {job.output && (
+                  <div className="border-t border-white/5 p-4">
+                    <pre className="bg-black/40 rounded-lg p-3 text-xs text-gray-400 max-h-32 overflow-y-auto custom-scrollbar font-mono whitespace-pre-wrap">
+                      {job.output}
+                    </pre>
+                  </div>
+                )}
+              </div>
+            ))
+          )}
         </div>
       </div>
     </div>

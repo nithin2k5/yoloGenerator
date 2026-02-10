@@ -87,7 +87,7 @@ export default function ProjectDeploy({ dataset }) {
                 </div>
                 <h3 className="text-xl font-semibold mb-2">No Trained Models Available</h3>
                 <p className="text-muted-foreground max-w-md mb-6">
-                    You haven't trained any models for this project yet. Go to the <strong>Train</strong> tab to create your first model version.
+                    You haven&apos;t trained any models for this project yet. Go to the <strong>Train</strong> tab to create your first model version.
                 </p>
             </div>
         );

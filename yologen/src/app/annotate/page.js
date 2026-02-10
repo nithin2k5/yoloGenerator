@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, Suspense } from "react";
+import { useState, useEffect, useRef, useCallback, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,7 +8,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { FiSave, FiTrash2, FiUpload, FiChevronLeft, FiChevronRight, FiHome, FiDownload } from "react-icons/fi";
+import AutoLabelModal from "@/components/project/AutoLabelModal";
+import {
+  FiSave, FiTrash2, FiUpload, FiChevronLeft, FiChevronRight, FiHome,
+  FiDownload, FiZoomIn, FiZoomOut, FiRotateCcw, FiMaximize, FiCheck, FiCopy, FiClipboard
+} from "react-icons/fi";
+import { Sparkles } from "lucide-react";
 
 function AnnotationToolContent() {
   const searchParams = useSearchParams();
@@ -19,18 +24,30 @@ function AnnotationToolContent() {
   const [images, setImages] = useState([]);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [boxes, setBoxes] = useState([]);
+  const [boxHistory, setBoxHistory] = useState([]);
   const [selectedClass, setSelectedClass] = useState(0);
   const [isDrawing, setIsDrawing] = useState(false);
   const [startPos, setStartPos] = useState(null);
   const [currentBox, setCurrentBox] = useState(null);
   const [selectedSplit, setSelectedSplit] = useState(null);
-  const [showSplitDialog, setShowSplitDialog] = useState(false);
   const [stats, setStats] = useState(null);
+  const [zoom, setZoom] = useState(1);
+  const [saveStatus, setSaveStatus] = useState(null); // 'saving' | 'saved' | 'error' | null
+  const [reviewStatus, setReviewStatus] = useState('annotated'); // 'unlabeled' | 'predicted' | 'annotated' | 'reviewed'
+  const [toastMessage, setToastMessage] = useState(null);
+  const [showAutoLabel, setShowAutoLabel] = useState(false);
+  const [copiedBoxes, setCopiedBoxes] = useState(null);
 
   const canvasRef = useRef(null);
   const imageRef = useRef(null);
   const fileInputRef = useRef(null);
-  const fileInputMoreRef = useRef(null);
+  const containerRef = useRef(null);
+
+  // Toast helper
+  const showToast = useCallback((message, type = 'success') => {
+    setToastMessage({ message, type });
+    setTimeout(() => setToastMessage(null), 3000);
+  }, []);
 
   useEffect(() => {
     if (datasetId) {
@@ -44,27 +61,16 @@ function AnnotationToolContent() {
     if (!datasetId) return;
     try {
       const response = await fetch(`http://localhost:8000/api/annotations/datasets/${datasetId}/stats`);
-      if (response.ok) {
-        const data = await response.json();
-        setStats(data);
-      }
+      if (response.ok) setStats(await response.json());
     } catch (error) {
       console.error("Error fetching stats:", error);
     }
   };
 
-  // Refresh stats periodically and when images change
   useEffect(() => {
     if (!datasetId) return;
-
-    // Initial fetch
     fetchStats();
-
-    // Refresh every 5 seconds
-    const interval = setInterval(() => {
-      fetchStats();
-    }, 5000);
-
+    const interval = setInterval(fetchStats, 5000);
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [datasetId]);
@@ -72,83 +78,144 @@ function AnnotationToolContent() {
   useEffect(() => {
     if (images.length > 0 && currentImageIndex < images.length) {
       loadImage(currentImageIndex);
+      setZoom(1);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentImageIndex, images.length]);
 
-  // Handle window resize to redraw canvas
   useEffect(() => {
     const handleResize = () => {
-      // Use a small debounce to avoid excessive redraws
       const timeoutId = setTimeout(() => {
-        if (canvasRef.current && imageRef.current?.complete) {
-          drawCanvas();
-        }
+        if (canvasRef.current && imageRef.current?.complete) drawCanvas();
       }, 100);
       return () => clearTimeout(timeoutId);
     };
-
     window.addEventListener('resize', handleResize);
-    return () => {
-      window.removeEventListener('resize', handleResize);
-    };
+    return () => window.removeEventListener('resize', handleResize);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [boxes, currentBox, isDrawing]);
 
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+      switch (e.key) {
+        case 'ArrowLeft':
+          e.preventDefault();
+          handleNavigation('prev');
+          break;
+        case 'ArrowRight':
+          e.preventDefault();
+          handleNavigation('next');
+          break;
+        case 's':
+        case 'S':
+          e.preventDefault();
+          handleSaveAnnotations().then(success => {
+            if (success) showToast('Annotations saved!');
+            else showToast('Failed to save', 'error');
+          });
+          break;
+        case 'Delete':
+        case 'Backspace':
+          if (boxes.length > 0) {
+            e.preventDefault();
+            handleDeleteBox(boxes.length - 1);
+            showToast('Last annotation deleted');
+          }
+          break;
+        case 'z':
+        case 'Z':
+          if ((e.ctrlKey || e.metaKey) && boxHistory.length > 0) {
+            e.preventDefault();
+            const lastState = boxHistory[boxHistory.length - 1];
+            setBoxes(lastState);
+            setBoxHistory(prev => prev.slice(0, -1));
+            showToast('Undo successful');
+          }
+          break;
+        case 'c':
+        case 'C':
+          if (e.ctrlKey || e.metaKey) {
+            e.preventDefault();
+            if (boxes.length > 0) {
+              setCopiedBoxes(boxes);
+              showToast(`Copied ${boxes.length} annotations`);
+            }
+          }
+          break;
+        case 'v':
+        case 'V':
+          if (e.ctrlKey || e.metaKey) {
+            e.preventDefault();
+            if (copiedBoxes && copiedBoxes.length > 0) {
+              setBoxHistory(prev => [...prev, boxes]);
+              setBoxes(prev => [...prev, ...copiedBoxes]);
+              showToast(`Pasted ${copiedBoxes.length} annotations`);
+            }
+          }
+          break;
+        default:
+          // Number keys 1-9 for class selection
+          const num = parseInt(e.key);
+          if (num >= 1 && num <= 9 && dataset?.classes?.length >= num) {
+            e.preventDefault();
+            setSelectedClass(num - 1);
+          }
+          break;
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [boxes, boxHistory, dataset, images, currentImageIndex]);
+
   const fetchDataset = async () => {
     if (!datasetId) return;
-
     try {
       const response = await fetch(`http://localhost:8000/api/annotations/datasets/${datasetId}`);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch dataset: ${response.status}`);
-      }
+      if (!response.ok) throw new Error(`Failed to fetch dataset: ${response.status}`);
       const data = await response.json();
       setDataset(data);
       setImages(data.images || []);
     } catch (error) {
       console.error("Error fetching dataset:", error);
-      alert("Error loading dataset. Make sure backend is running.");
+      showToast("Error loading dataset. Make sure backend is running.", 'error');
     }
   };
 
   const loadImage = async (index) => {
     if (!images[index] || !datasetId) return;
-
     const img = images[index];
-
-    // Load existing annotations
     try {
       const response = await fetch(`http://localhost:8000/api/annotations/annotations/${datasetId}/${img.id}`);
       if (response.ok) {
         const data = await response.json();
         setBoxes(data.boxes || []);
+        setReviewStatus(data.status || 'annotated');
       } else {
         setBoxes([]);
+        setReviewStatus('unlabeled');
       }
     } catch (error) {
-      console.error("Error loading annotations:", error);
       setBoxes([]);
+      setReviewStatus('unlabeled');
     }
-
-    // Load split assignment
     setSelectedSplit(img.split || null);
-    setShowSplitDialog(false);
+    setBoxHistory([]);
   };
 
   const handleUploadImages = async (e) => {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
-
-    // Reset input value to allow re-uploading the same file
     e.target.value = '';
 
     if (!datasetId) {
-      alert("Error: Dataset ID not found");
+      showToast("Error: Dataset ID not found", 'error');
       return;
     }
 
-    // Validate files before upload
     const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/bmp', 'image/webp'];
     const invalidFiles = files.filter(file => {
       const type = file.type.toLowerCase();
@@ -156,115 +223,64 @@ function AnnotationToolContent() {
     });
 
     if (invalidFiles.length > 0) {
-      alert(`Invalid file types detected. Please upload only images (JPG, PNG, GIF, BMP, WEBP).\n\nInvalid files: ${invalidFiles.map(f => f.name).join(', ')}`);
+      showToast(`Invalid files: ${invalidFiles.map(f => f.name).join(', ')}`, 'error');
       return;
     }
 
     const formData = new FormData();
-    files.forEach(file => {
-      // Ensure each file is appended with the correct field name
-      formData.append("files", file);
-    });
+    files.forEach(file => formData.append("files", file));
 
     try {
       const response = await fetch(`http://localhost:8000/api/annotations/datasets/${datasetId}/upload`, {
         method: "POST",
         body: formData,
-        // Don't set Content-Type header, let browser set it with boundary
       });
 
       if (!response.ok) {
         const errorText = await response.text();
         let errorData;
-        try {
-          errorData = JSON.parse(errorText);
-        } catch {
-          errorData = { detail: errorText || `Server error: ${response.status}` };
-        }
+        try { errorData = JSON.parse(errorText); } catch { errorData = { detail: errorText || `Server error: ${response.status}` }; }
         throw new Error(errorData.detail || `Upload failed: ${response.status}`);
       }
 
       const data = await response.json();
-
       if (data.success) {
-        let message = `✅ ${data.uploaded} image${data.uploaded !== 1 ? 's' : ''} uploaded successfully!`;
-        if (data.errors && data.errors.length > 0) {
-          message += `\n\n⚠️ ${data.error_count} file${data.error_count !== 1 ? 's' : ''} failed:\n${data.errors.slice(0, 3).join('\n')}`;
-          if (data.errors.length > 3) {
-            message += `\n... and ${data.errors.length - 3} more`;
-          }
-        }
-        alert(message);
+        showToast(`✅ ${data.uploaded} image${data.uploaded !== 1 ? 's' : ''} uploaded!`);
         fetchDataset();
       } else {
-        let errorMsg = data.detail || "Upload failed";
-        if (data.errors && data.errors.length > 0) {
-          errorMsg += `\n\nErrors:\n${data.errors.join('\n')}`;
-        }
-        throw new Error(errorMsg);
+        throw new Error(data.detail || "Upload failed");
       }
     } catch (error) {
-      console.error("Error uploading images:", error);
-      alert(`❌ Error uploading images: ${error.message}\n\nMake sure:\n- Backend is running on port 8000\n- Files are valid images\n- You have permission to upload`);
+      showToast(`❌ Upload error: ${error.message}`, 'error');
     }
   };
 
   const getCanvasCoordinates = (e) => {
     const canvas = canvasRef.current;
     if (!canvas || !e) return { x: 0, y: 0 };
-
     const img = imageRef.current;
-    if (!img || !img.complete || img.naturalWidth === 0 || !canvas.width || !canvas.height) {
-      return { x: 0, y: 0 };
-    }
+    if (!img || !img.complete || img.naturalWidth === 0) return { x: 0, y: 0 };
 
-    // Get canvas bounding rectangle
     const rect = canvas.getBoundingClientRect();
-
-    // Get computed styles to account for borders
     const styles = window.getComputedStyle(canvas);
     const borderLeft = parseFloat(styles.borderLeftWidth) || 0;
-    const borderRight = parseFloat(styles.borderRightWidth) || 0;
     const borderTop = parseFloat(styles.borderTopWidth) || 0;
-    const borderBottom = parseFloat(styles.borderBottomWidth) || 0;
-
-    // Image natural dimensions (these are what we store annotations in)
-    const imageWidth = img.naturalWidth;
-    const imageHeight = img.naturalHeight;
-
-    // Canvas internal dimensions (should match image dimensions)
-    const canvasWidth = canvas.width;
-    const canvasHeight = canvas.height;
-
-    // Get displayed canvas dimensions (actual rendered size on screen, excluding borders)
-    const displayWidth = rect.width - borderLeft - borderRight;
-    const displayHeight = rect.height - borderTop - borderBottom;
-
-    // Calculate the actual scale factor
-    // Canvas is scaled proportionally, so scale should be the same for both axes
-    const scale = imageWidth / displayWidth;
-
-    // Get mouse position relative to canvas element (including borders in the offset)
+    const displayWidth = rect.width - (parseFloat(styles.borderLeftWidth) || 0) - (parseFloat(styles.borderRightWidth) || 0);
+    const scale = img.naturalWidth / displayWidth;
     const mouseX = e.clientX - rect.left - borderLeft;
     const mouseY = e.clientY - rect.top - borderTop;
-
-    // Convert display coordinates to image coordinates
     const imageX = mouseX * scale;
     const imageY = mouseY * scale;
-
-    // Clamp to image bounds
-    const clampedX = Math.max(0, Math.min(imageX, imageWidth));
-    const clampedY = Math.max(0, Math.min(imageY, imageHeight));
-
-    return { x: clampedX, y: clampedY };
+    return {
+      x: Math.max(0, Math.min(imageX, img.naturalWidth)),
+      y: Math.max(0, Math.min(imageY, img.naturalHeight))
+    };
   };
 
   const handleMouseDown = (e) => {
     e.preventDefault();
     if (!canvasRef.current || !dataset) return;
-
     const { x, y } = getCanvasCoordinates(e);
-
     setIsDrawing(true);
     setStartPos({ x, y });
     setCurrentBox({ x, y, width: 0, height: 0 });
@@ -273,33 +289,23 @@ function AnnotationToolContent() {
   const handleMouseMove = (e) => {
     e.preventDefault();
     if (!isDrawing || !startPos || !canvasRef.current) return;
-
     const { x, y } = getCanvasCoordinates(e);
-
-    const width = x - startPos.x;
-    const height = y - startPos.y;
-
-    setCurrentBox({ x: startPos.x, y: startPos.y, width, height });
+    setCurrentBox({ x: startPos.x, y: startPos.y, width: x - startPos.x, height: y - startPos.y });
     drawCanvas();
   };
 
   const handleMouseUp = (e) => {
     e.preventDefault();
     if (!isDrawing || !startPos || !dataset || !canvasRef.current) {
-      setIsDrawing(false);
-      setStartPos(null);
-      setCurrentBox(null);
+      setIsDrawing(false); setStartPos(null); setCurrentBox(null);
       return;
     }
 
-    // Calculate final box dimensions from current mouse position
     const { x, y } = getCanvasCoordinates(e);
     const width = x - startPos.x;
     const height = y - startPos.y;
 
-    // Add box if it has reasonable size
     if (Math.abs(width) > 10 && Math.abs(height) > 10) {
-      // Normalize negative dimensions
       const normalizedBox = {
         x: width < 0 ? startPos.x + width : startPos.x,
         y: height < 0 ? startPos.y + height : startPos.y,
@@ -309,22 +315,32 @@ function AnnotationToolContent() {
         class_name: dataset.classes[selectedClass]
       };
 
-      // Use functional update to ensure we have the latest boxes
+      setBoxHistory(prev => [...prev, boxes]);
       setBoxes(prevBoxes => [...prevBoxes, normalizedBox]);
-
-      // Force canvas redraw after state update
-      setTimeout(() => {
-        setCurrentBox(null);
-        drawCanvas();
-      }, 0);
+      setTimeout(() => { setCurrentBox(null); drawCanvas(); }, 0);
     } else {
-      // Clear current box if too small
       setCurrentBox(null);
       drawCanvas();
     }
-
     setIsDrawing(false);
     setStartPos(null);
+  };
+
+  // Color palette for classes
+  const getClassColor = (classId) => {
+    const colors = [
+      { stroke: '#6366f1', fill: 'rgba(99,102,241,0.15)' },    // indigo
+      { stroke: '#f43f5e', fill: 'rgba(244,63,94,0.15)' },     // rose
+      { stroke: '#10b981', fill: 'rgba(16,185,129,0.15)' },    // emerald
+      { stroke: '#f59e0b', fill: 'rgba(245,158,11,0.15)' },    // amber
+      { stroke: '#8b5cf6', fill: 'rgba(139,92,246,0.15)' },    // violet
+      { stroke: '#06b6d4', fill: 'rgba(6,182,212,0.15)' },     // cyan
+      { stroke: '#ec4899', fill: 'rgba(236,72,153,0.15)' },    // pink
+      { stroke: '#84cc16', fill: 'rgba(132,204,22,0.15)' },    // lime
+      { stroke: '#ef4444', fill: 'rgba(239,68,68,0.15)' },     // red
+      { stroke: '#3b82f6', fill: 'rgba(59,130,246,0.15)' },    // blue
+    ];
+    return colors[classId % colors.length];
   };
 
   const drawCanvas = () => {
@@ -333,36 +349,59 @@ function AnnotationToolContent() {
     if (!canvas || !img || !img.complete || img.naturalWidth === 0) return;
 
     const ctx = canvas.getContext('2d');
-
     try {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      // Draw image
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-      // Draw existing boxes
-      boxes.forEach((box, index) => {
-        const classIndex = box.class_id % 10;
-        const hue = (classIndex * 360 / 10);
-        ctx.strokeStyle = `hsl(${hue}, 100%, 50%)`;
-        ctx.lineWidth = 2;
+      // Draw existing boxes with colored fills
+      boxes.forEach((box) => {
+        const color = getClassColor(box.class_id);
+
+        // Semi-transparent fill
+        ctx.fillStyle = color.fill;
+        ctx.fillRect(box.x, box.y, box.width, box.height);
+
+        // Stroke
+        ctx.strokeStyle = color.stroke;
+        ctx.lineWidth = 3;
         ctx.strokeRect(box.x, box.y, box.width, box.height);
 
-        // Draw label
-        ctx.fillStyle = `hsl(${hue}, 100%, 50%)`;
-        const labelText = box.class_name;
-        const labelWidth = ctx.measureText(labelText).width + 10;
-        ctx.fillRect(box.x, box.y - 20, labelWidth, 20);
-        ctx.fillStyle = 'white';
-        ctx.font = '14px Arial';
-        ctx.fillText(labelText, box.x + 5, box.y - 5);
+        // Label with background
+        const labelText = `${box.class_name}`;
+        ctx.font = 'bold 13px Inter, system-ui, sans-serif';
+        const labelWidth = ctx.measureText(labelText).width + 12;
+        const labelHeight = 22;
+
+        // Label background
+        ctx.fillStyle = color.stroke;
+        const radius = 4;
+        const lx = box.x;
+        const ly = box.y - labelHeight;
+        ctx.beginPath();
+        ctx.moveTo(lx + radius, ly);
+        ctx.lineTo(lx + labelWidth - radius, ly);
+        ctx.quadraticCurveTo(lx + labelWidth, ly, lx + labelWidth, ly + radius);
+        ctx.lineTo(lx + labelWidth, ly + labelHeight);
+        ctx.lineTo(lx, ly + labelHeight);
+        ctx.lineTo(lx, ly + radius);
+        ctx.quadraticCurveTo(lx, ly, lx + radius, ly);
+        ctx.closePath();
+        ctx.fill();
+
+        // Label text
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(labelText, box.x + 6, box.y - 6);
       });
 
       // Draw current box being drawn
       if (currentBox && isDrawing) {
         ctx.strokeStyle = '#a78bfa';
         ctx.lineWidth = 2;
+        ctx.setLineDash([6, 4]);
         ctx.strokeRect(currentBox.x, currentBox.y, currentBox.width, currentBox.height);
+        ctx.fillStyle = 'rgba(167, 139, 250, 0.1)';
+        ctx.fillRect(currentBox.x, currentBox.y, currentBox.width, currentBox.height);
+        ctx.setLineDash([]);
       }
     } catch (error) {
       console.error("Error drawing canvas:", error);
@@ -370,35 +409,32 @@ function AnnotationToolContent() {
   };
 
   useEffect(() => {
-    if (canvasRef.current && imageRef.current?.complete) {
-      drawCanvas();
-    }
+    if (canvasRef.current && imageRef.current?.complete) drawCanvas();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [boxes, currentBox, isDrawing]);
 
-  // Redraw when image loads
   useEffect(() => {
-    if (imageRef.current && imageRef.current.complete && canvasRef.current) {
-      drawCanvas();
-    }
+    if (imageRef.current && imageRef.current.complete && canvasRef.current) drawCanvas();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentImageIndex]);
 
-  const handleSaveAnnotations = async () => {
+  const handleSaveAnnotations = async (statusOverride = null) => {
     if (!images[currentImageIndex] || !dataset) return false;
+    setSaveStatus('saving');
 
-    // Check natural dimensions availability
     const naturalWidth = imageRef.current?.naturalWidth || 0;
     const naturalHeight = imageRef.current?.naturalHeight || 0;
-
-    // If image isn't loaded yet, try to use canvas dimensions or skip
-    // We should be careful not to overwrite valid annotations with 0-size data
-    // if the image hasn't loaded. But if boxes is empty, it's fine.
-
-    // If we have boxes but no dimensions, that's risky. 
-    // However, the user is navigating away, so they likely saw the image.
-
     const img = images[currentImageIndex];
+
+    // Determine status: if override provided use it, otherwise keep current status unless it was 'predicted'/'unlabeled' then promote to 'annotated'
+    let newStatus = statusOverride || reviewStatus;
+    if (!statusOverride) {
+      if (boxes.length > 0 && (reviewStatus === 'unlabeled' || reviewStatus === 'predicted')) {
+        newStatus = 'annotated';
+      } else if (boxes.length === 0) {
+        newStatus = 'unlabeled';
+      }
+    }
 
     try {
       const response = await fetch(`http://localhost:8000/api/annotations/annotations/save`, {
@@ -411,65 +447,31 @@ function AnnotationToolContent() {
           width: naturalWidth || 0,
           height: naturalHeight || 0,
           boxes: boxes,
-          split: selectedSplit || null
+          split: selectedSplit || null,
+          status: newStatus
         })
       });
 
       if (response.ok) {
-        await fetchStats(); // Refresh stats in background
+        setSaveStatus('saved');
+        setReviewStatus(newStatus);
+        setTimeout(() => setSaveStatus(null), 2000);
+        await fetchStats();
         return true;
       } else {
-        console.error("Failed to save annotations:", await response.text());
+        setSaveStatus('error');
+        setTimeout(() => setSaveStatus(null), 3000);
         return false;
       }
     } catch (error) {
-      console.error("Error saving annotations:", error);
+      setSaveStatus('error');
+      setTimeout(() => setSaveStatus(null), 3000);
       return false;
     }
   };
 
-  const handleSplitSelection = async (split) => {
-    if (!images[currentImageIndex]) return;
-
-    const img = images[currentImageIndex];
-    setSelectedSplit(split);
-
-    try {
-      // Update split on backend
-      const response = await fetch(
-        `http://localhost:8000/api/annotations/datasets/${datasetId}/images/${img.id}/split`,
-        {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ split })
-        }
-      );
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || "Failed to update split");
-      }
-
-      // Update local state
-      const updatedImages = [...images];
-      updatedImages[currentImageIndex].split = split;
-      setImages(updatedImages);
-
-      // Close dialog and move to next image
-      setShowSplitDialog(false);
-      handleNextImage();
-    } catch (error) {
-      console.error("Error updating split:", error);
-      alert(`Error updating split: ${error.message}`);
-    }
-  };
-
-
-
   const handleNavigation = async (direction) => {
-    // Auto-save before moving
     await handleSaveAnnotations();
-
     if (direction === 'next') {
       setCurrentImageIndex(prev => Math.min(images.length - 1, prev + 1));
     } else {
@@ -478,15 +480,20 @@ function AnnotationToolContent() {
   };
 
   const handleDeleteBox = (index) => {
+    setBoxHistory(prev => [...prev, boxes]);
     setBoxes(boxes.filter((_, i) => i !== index));
+  };
+
+  const handleZoom = (delta) => {
+    setZoom(prev => Math.max(0.5, Math.min(3, prev + delta)));
   };
 
   if (!dataset) {
     return (
       <div className="min-h-screen bg-black text-foreground flex items-center justify-center">
         <div className="text-center">
-          <p className="text-muted-foreground mb-4">Loading dataset...</p>
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+          <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-muted-foreground">Loading dataset...</p>
         </div>
       </div>
     );
@@ -498,8 +505,7 @@ function AnnotationToolContent() {
         <div className="text-center">
           <p className="text-muted-foreground mb-4">Error: Dataset has no classes defined</p>
           <Button onClick={() => router.push('/dashboard')} className="bg-primary hover:bg-primary/90">
-            <FiHome className="mr-2" />
-            Return to Dashboard
+            <FiHome className="mr-2" /> Return to Dashboard
           </Button>
         </div>
       </div>
@@ -510,48 +516,61 @@ function AnnotationToolContent() {
 
   return (
     <div className="h-screen bg-black text-foreground overflow-hidden flex flex-col">
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className={`fixed top-4 right-4 z-[100] px-4 py-3 rounded-xl shadow-2xl text-sm font-medium animate-slide-up backdrop-blur-xl border ${toastMessage.type === 'error'
+          ? 'bg-red-500/20 border-red-500/30 text-red-200'
+          : 'bg-emerald-500/20 border-emerald-500/30 text-emerald-200'
+          }`}>
+          {toastMessage.message}
+        </div>
+      )}
+
       {/* Header */}
-      <header className="border-b border-border bg-card shrink-0 z-50 h-[65px]">
-        <div className="container mx-auto px-6 h-full">
+      <header className="border-b border-white/5 bg-zinc-950/90 backdrop-blur-xl shrink-0 z-50 h-[56px]">
+        <div className="px-4 h-full">
           <div className="flex items-center justify-between h-full">
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3">
               <Button
                 onClick={() => {
-                  if (datasetId) {
-                    router.push(`/project/${datasetId}`);
-                  } else {
-                    router.push('/dashboard');
-                  }
+                  if (datasetId) router.push(`/project/${datasetId}`);
+                  else router.push('/dashboard');
                 }}
-                className="bg-primary hover:bg-primary/90 text-primary-foreground"
+                variant="ghost"
                 size="sm"
+                className="text-gray-400 hover:text-white"
               >
-                <FiChevronLeft className="mr-2" />
-                {datasetId ? "Project" : "Dashboard"}
+                <FiChevronLeft className="mr-1" />
+                Back
               </Button>
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-px bg-border"></div>
-                <div>
-                  <h1 className="text-xl font-bold">{dataset?.name || 'Loading...'}</h1>
-                  <p className="text-xs text-muted-foreground">
-                    Image {currentImageIndex + 1} of {images.length}
-                    {selectedSplit && (
-                      <span className="ml-2">
-                        • <span className="capitalize">{selectedSplit}</span>
-                      </span>
-                    )}
-                  </p>
-                </div>
+              <div className="h-6 w-px bg-white/10" />
+              <div>
+                <h1 className="text-sm font-semibold">{dataset?.name || 'Loading...'}</h1>
+                <p className="text-[11px] text-muted-foreground">
+                  {currentImageIndex + 1} / {images.length}
+                  {selectedSplit && <span className="ml-1">• <span className="capitalize">{selectedSplit}</span></span>}
+                </p>
               </div>
             </div>
-            <div className="flex items-center gap-3">
-              {stats && (
-                <Badge variant="outline" className="border-border">
-                  {stats.annotated_images || 0} / {stats.total_images || 0} annotated
+
+            <div className="flex items-center gap-2">
+              {/* Save Status Indicator */}
+              {saveStatus && (
+                <Badge variant="outline" className={`text-xs ${saveStatus === 'saving' ? 'border-amber-500/30 text-amber-400' :
+                  saveStatus === 'saved' ? 'border-emerald-500/30 text-emerald-400' :
+                    'border-red-500/30 text-red-400'
+                  }`}>
+                  {saveStatus === 'saving' ? '● Saving...' : saveStatus === 'saved' ? '✓ Saved' : '✕ Error'}
                 </Badge>
               )}
-              <Badge>
-                {boxes.length} {boxes.length === 1 ? 'annotation' : 'annotations'}
+
+              {stats && (
+                <Badge variant="outline" className="border-white/10 text-xs">
+                  {stats.annotated_images || 0}/{stats.total_images || 0} done
+                </Badge>
+              )}
+              <Badge className="bg-indigo-500/20 text-indigo-300 border-indigo-500/30 text-xs">
+                {boxes.length} box{boxes.length !== 1 ? 'es' : ''}
               </Badge>
             </div>
           </div>
@@ -560,159 +579,200 @@ function AnnotationToolContent() {
 
       {/* Main Content */}
       <main className="flex-1 min-h-0 overflow-hidden">
-        <div className="grid grid-cols-[15%_70%_15%] h-full">
+        <div className="grid grid-cols-[200px_1fr_220px] h-full">
 
-          {/* Left Sidebar - Tools & Classes */}
-          <div className="border-r border-border bg-card p-4 overflow-y-auto space-y-6">
-            <div className="space-y-4">
-              <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">Classes</h3>
-              {dataset && dataset.classes && dataset.classes.length > 0 ? (
-                <div className="space-y-2">
-                  {dataset.classes.map((cls, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => setSelectedClass(idx)}
-                      className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors flex items-center justify-between ${selectedClass === idx
-                        ? 'bg-primary/20 text-primary border border-primary/30'
-                        : 'hover:bg-muted text-muted-foreground'
-                        }`}
-                    >
+          {/* Left Sidebar - Classes */}
+          <div className="border-r border-white/5 bg-zinc-950/60 p-3 overflow-y-auto custom-scrollbar space-y-4">
+            <div>
+              <h3 className="font-medium text-xs text-gray-500 uppercase tracking-wider mb-2 px-1">Classes</h3>
+              {dataset?.classes?.map((cls, idx) => {
+                const color = getClassColor(idx);
+                return (
+                  <button
+                    key={idx}
+                    onClick={() => setSelectedClass(idx)}
+                    className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all flex items-center justify-between gap-2 mb-1 ${selectedClass === idx
+                      ? 'bg-white/10 text-white'
+                      : 'hover:bg-white/5 text-gray-400 hover:text-gray-200'
+                      }`}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="w-3 h-3 rounded-sm flex-shrink-0" style={{ backgroundColor: color.stroke }} />
                       <span className="truncate">{cls}</span>
-                      {selectedClass === idx && <div className="w-2 h-2 rounded-full bg-primary" />}
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-destructive">No classes defined</p>
-              )}
+                    </div>
+                    <span className="text-[10px] text-gray-600 flex-shrink-0">{idx + 1}</span>
+                  </button>
+                );
+              })}
             </div>
 
-            <div className="pt-4 border-t border-border">
-              <p className="text-xs text-muted-foreground mb-2">Controls</p>
-              <div className="text-xs text-muted-foreground space-y-1">
-                <p>• Click & Drag to draw</p>
-                <p>• Select class on left</p>
-                <p>• Delete on right</p>
+            <div className="pt-3 border-t border-white/5">
+              <h3 className="font-medium text-xs text-gray-500 uppercase tracking-wider mb-2 px-1">Shortcuts</h3>
+              <div className="text-[11px] text-gray-500 space-y-1.5 px-1">
+                <div className="flex justify-between"><span>Navigate</span><kbd className="bg-white/5 px-1.5 py-0.5 rounded text-gray-400">← →</kbd></div>
+                <div className="flex justify-between"><span>Save</span><kbd className="bg-white/5 px-1.5 py-0.5 rounded text-gray-400">S</kbd></div>
+                <div className="flex justify-between"><span>Delete last</span><kbd className="bg-white/5 px-1.5 py-0.5 rounded text-gray-400">Del</kbd></div>
+                <div className="flex justify-between"><span>Undo</span><kbd className="bg-white/5 px-1.5 py-0.5 rounded text-gray-400">⌘Z</kbd></div>
+                <div className="flex justify-between"><span>Class</span><kbd className="bg-white/5 px-1.5 py-0.5 rounded text-gray-400">1-9</kbd></div>
               </div>
             </div>
           </div>
 
-          {/* Center Workspace - Canvas */}
-          <div className="bg-black/50 relative flex flex-col h-full overflow-hidden">
-            <div className="flex-1 flex items-center justify-center p-6 overflow-hidden relative">
-              <Card className="bg-transparent border-none shadow-none w-full h-full flex items-center justify-center">
-                <CardContent className="p-0 flex items-center justify-center w-full h-full relative">
-                  {currentImage ? (
-                    <div className="relative w-full h-full flex items-center justify-center">
-                      <img
-                        ref={imageRef}
-                        src={`http://localhost:8000/api/annotations/image/${datasetId}/${currentImage.filename}`}
-                        alt="Annotate"
-                        className="hidden"
-                        onLoad={(e) => {
-                          const canvas = canvasRef.current;
-                          const img = e.target;
-                          if (canvas && img.complete && img.naturalWidth > 0) {
-                            canvas.width = img.naturalWidth;
-                            canvas.height = img.naturalHeight;
-
-                            // Let the canvas sit naturally within the container
-                            // We use object-contain equivalent logic via CSS on the canvas
-                            canvas.style.maxWidth = '100%';
-                            canvas.style.maxHeight = '100%';
-                            canvas.style.width = 'auto';
-                            canvas.style.height = 'auto';
-                            canvas.style.display = 'block';
-
-                            canvas.offsetHeight;
-                            setTimeout(() => drawCanvas(), 100);
-                          }
-                        }}
-                        onError={(e) => {
-                          console.error("Image failed:", e);
-                        }}
-                      />
-                      <canvas
-                        ref={canvasRef}
-                        onMouseDown={handleMouseDown}
-                        onMouseMove={handleMouseMove}
-                        onMouseUp={handleMouseUp}
-                        onMouseLeave={(e) => {
-                          if (isDrawing && startPos) {
-                            setIsDrawing(false);
-                            setStartPos(null);
-                            setCurrentBox(null);
-                            setTimeout(() => drawCanvas(), 0);
-                          }
-                        }}
-                        className="border border-border/50 shadow-2xl rounded-sm cursor-crosshair bg-black"
-                        style={{
-                          maxWidth: '100%',
-                          maxHeight: '100%',
-                          display: 'block'
-                        }}
-                      />
-                    </div>
-                  ) : (
-                    <div className="text-center">
-                      <p className="text-muted-foreground mb-4">No images available</p>
-                      <Button onClick={() => fileInputRef.current?.click()}>
-                        Upload Images
-                      </Button>
-                      <Input
-                        ref={fileInputRef}
-                        type="file"
-                        multiple
-                        accept="image/*"
-                        onChange={handleUploadImages}
-                        className="hidden"
-                      />
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+          {/* Center - Canvas */}
+          <div className="bg-zinc-900/50 relative flex flex-col h-full overflow-hidden">
+            <div ref={containerRef} className="flex-1 flex items-center justify-center p-4 overflow-hidden relative">
+              {currentImage ? (
+                <div className="relative w-full h-full flex items-center justify-center" style={{ transform: `scale(${zoom})`, transition: 'transform 0.2s ease' }}>
+                  <img
+                    ref={imageRef}
+                    src={`http://localhost:8000/api/annotations/image/${datasetId}/${currentImage.filename}`}
+                    alt="Annotate"
+                    className="hidden"
+                    onLoad={(e) => {
+                      const canvas = canvasRef.current;
+                      const img = e.target;
+                      if (canvas && img.complete && img.naturalWidth > 0) {
+                        canvas.width = img.naturalWidth;
+                        canvas.height = img.naturalHeight;
+                        canvas.style.maxWidth = '100%';
+                        canvas.style.maxHeight = '100%';
+                        canvas.style.width = 'auto';
+                        canvas.style.height = 'auto';
+                        canvas.style.display = 'block';
+                        canvas.offsetHeight;
+                        setTimeout(() => drawCanvas(), 50);
+                      }
+                    }}
+                    onError={(e) => console.error("Image failed:", e)}
+                  />
+                  <canvas
+                    ref={canvasRef}
+                    onMouseDown={handleMouseDown}
+                    onMouseMove={handleMouseMove}
+                    onMouseUp={handleMouseUp}
+                    onMouseLeave={() => {
+                      if (isDrawing && startPos) {
+                        setIsDrawing(false); setStartPos(null); setCurrentBox(null);
+                        setTimeout(() => drawCanvas(), 0);
+                      }
+                    }}
+                    className="border border-white/5 shadow-2xl rounded cursor-crosshair bg-black"
+                    style={{ maxWidth: '100%', maxHeight: '100%', display: 'block' }}
+                  />
+                </div>
+              ) : (
+                <div className="text-center">
+                  <p className="text-muted-foreground mb-4">No images available</p>
+                  <Button onClick={() => fileInputRef.current?.click()}>Upload Images</Button>
+                  <Input ref={fileInputRef} type="file" multiple accept="image/*" onChange={handleUploadImages} className="hidden" />
+                </div>
+              )}
             </div>
 
-            {/* Bottom Bar - Navigation */}
+            {/* Zoom Controls */}
+            <div className="absolute bottom-20 right-4 flex flex-col gap-1 z-20">
+              <Button variant="ghost" size="icon" onClick={() => handleZoom(0.25)} className="h-8 w-8 bg-black/60 backdrop-blur-sm border border-white/10 text-white hover:bg-white/10">
+                <FiZoomIn className="w-3.5 h-3.5" />
+              </Button>
+              <Button variant="ghost" size="icon" onClick={() => handleZoom(-0.25)} className="h-8 w-8 bg-black/60 backdrop-blur-sm border border-white/10 text-white hover:bg-white/10">
+                <FiZoomOut className="w-3.5 h-3.5" />
+              </Button>
+              <Button variant="ghost" size="icon" onClick={() => setZoom(1)} className="h-8 w-8 bg-black/60 backdrop-blur-sm border border-white/10 text-white hover:bg-white/10">
+                <FiMaximize className="w-3.5 h-3.5" />
+              </Button>
+            </div>
+
+            {/* Bottom Navigation + Thumbnails */}
             {images.length > 0 && (
-              <div className="h-14 border-t border-border bg-card flex items-center justify-between px-6 shrink-0">
-                <Button
-                  onClick={() => handleNavigation('prev')}
-                  disabled={currentImageIndex === 0}
-                  variant="ghost"
-                  size="sm"
-                >
-                  <FiChevronLeft className="mr-2" /> Previous
-                </Button>
+              <div className="border-t border-white/5 bg-zinc-950/80 backdrop-blur-sm shrink-0">
+                {/* Thumbnail Strip */}
+                <div className="h-16 flex items-center gap-1 px-4 overflow-x-auto custom-scrollbar">
+                  {images.map((img, idx) => (
+                    <button
+                      key={idx}
+                      onClick={async () => {
+                        await handleSaveAnnotations();
+                        setCurrentImageIndex(idx);
+                      }}
+                      className={`flex-shrink-0 w-12 h-12 rounded-lg overflow-hidden border-2 transition-all hover:opacity-100 ${idx === currentImageIndex
+                        ? 'border-indigo-500 opacity-100 scale-105'
+                        : 'border-white/5 opacity-50 hover:border-white/20'
+                        }`}
+                    >
+                      <img
+                        src={`http://localhost:8000/api/annotations/image/${datasetId}/${img.filename}`}
+                        alt={img.original_name}
+                        className="w-full h-full object-cover"
+                        loading="lazy"
+                      />
+                    </button>
+                  ))}
+                </div>
 
-                <span className="text-sm font-medium">
-                  {currentImage?.original_name}
-                </span>
-
-                <Button
-                  onClick={() => handleNavigation('next')}
-                  disabled={currentImageIndex === images.length - 1}
-                  variant="ghost"
-                  size="sm"
-                >
-                  Next <FiChevronRight className="ml-2" />
-                </Button>
+                {/* Navigation */}
+                <div className="h-10 flex items-center justify-between px-4 border-t border-white/5">
+                  <Button onClick={() => handleNavigation('prev')} disabled={currentImageIndex === 0} variant="ghost" size="sm" className="h-7 text-xs text-gray-400">
+                    <FiChevronLeft className="mr-1" /> Prev
+                  </Button>
+                  <span className="text-xs text-gray-500 truncate max-w-[200px]">{currentImage?.original_name}</span>
+                  <Button onClick={() => handleNavigation('next')} disabled={currentImageIndex === images.length - 1} variant="ghost" size="sm" className="h-7 text-xs text-gray-400">
+                    Next <FiChevronRight className="ml-1" />
+                  </Button>
+                </div>
               </div>
             )}
           </div>
 
           {/* Right Sidebar - Annotations & Actions */}
-          <div className="border-l border-border bg-card p-4 overflow-y-auto space-y-6">
+          <div className="border-l border-white/5 bg-zinc-950/60 p-3 overflow-y-auto custom-scrollbar space-y-4">
+            {/* Review Controls */}
+            <div className="p-3 bg-white/5 rounded-lg border border-white/5 space-y-2 mb-4">
+              <h3 className="font-medium text-xs text-gray-500 uppercase tracking-wider mb-2">Review</h3>
+              <Button
+                onClick={() => handleSaveAnnotations('reviewed')}
+                className={`w-full h-8 text-xs ${reviewStatus === 'reviewed' ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-white/10 hover:bg-white/20'}`}
+              >
+                <FiCheck className="mr-1.5" />
+                {reviewStatus === 'reviewed' ? 'Reviewed' : 'Mark as Reviewed'}
+              </Button>
+            </div>
 
-            {/* Action Buttons */}
-            <div className="space-y-3">
+            <div className="space-y-2">
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 text-xs border border-white/5"
+                  onClick={() => {
+                    setCopiedBoxes(boxes);
+                    showToast(`Copied ${boxes.length} boxes`);
+                  }}
+                >
+                  <FiCopy className="mr-1.5" /> Copy
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 text-xs border border-white/5"
+                  disabled={!copiedBoxes}
+                  onClick={() => {
+                    if (copiedBoxes) {
+                      setBoxHistory(prev => [...prev, boxes]);
+                      setBoxes(prev => [...prev, ...copiedBoxes]);
+                      showToast(`Pasted ${copiedBoxes.length} boxes`);
+                    }
+                  }}
+                >
+                  <FiClipboard className="mr-1.5" /> Paste
+                </Button>
+              </div>
+
               <Button onClick={async () => {
                 const success = await handleSaveAnnotations();
-                if (success) alert("Annotations saved successfully!");
-                else alert("Failed to save annotations. See console for details.");
-              }} className="w-full bg-primary hover:bg-primary/90">
-                <FiSave className="mr-2" />
-                Save
+                if (success) showToast("Annotations saved!");
+                else showToast("Failed to save", 'error');
+              }} className="w-full bg-indigo-600 hover:bg-indigo-500 h-9 text-sm">
+                <FiSave className="mr-2 w-3.5 h-3.5" /> Save
               </Button>
               <Button
                 onClick={async () => {
@@ -721,73 +781,78 @@ function AnnotationToolContent() {
                   window.location.href = `http://localhost:8000/api/annotations/datasets/${datasetId}/export`;
                 }}
                 variant="outline"
-                className="w-full border-border"
+                className="w-full border-white/10 h-9 text-sm"
               >
-                <FiDownload className="mr-2" />
-                Export
+                <FiDownload className="mr-2 w-3.5 h-3.5" /> Export
               </Button>
+              {boxHistory.length > 0 && (
+                <Button
+                  onClick={() => {
+                    const lastState = boxHistory[boxHistory.length - 1];
+                    setBoxes(lastState);
+                    setBoxHistory(prev => prev.slice(0, -1));
+                    showToast('Undo successful');
+                  }}
+                  variant="ghost"
+                  className="w-full border border-white/5 h-9 text-sm text-gray-400"
+                >
+                  <FiRotateCcw className="mr-2 w-3.5 h-3.5" /> Undo
+                </Button>
+              )}
             </div>
 
             {/* Annotations List */}
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">Annotations</h3>
-                <Badge variant="outline" className="text-xs">{boxes.length}</Badge>
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="font-medium text-xs text-gray-500 uppercase tracking-wider">Annotations</h3>
+                <Badge variant="outline" className="text-[10px] h-5 border-white/10">{boxes.length}</Badge>
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 {boxes.length > 0 ? (
-                  boxes.map((box, index) => (
-                    <div key={index} className="flex items-center justify-between p-3 bg-muted/30 rounded-lg border border-border/50 hover:border-primary/50 transition-colors group">
-                      <div>
-                        <div className="flex items-center gap-2 mb-1">
-                          <div className="w-2 h-2 rounded-full" style={{ backgroundColor: `hsl(${(box.class_id % 10) * 36}, 100%, 50%)` }} />
-                          <span className="font-medium text-sm">{box.class_name}</span>
+                  boxes.map((box, index) => {
+                    const color = getClassColor(box.class_id);
+                    return (
+                      <div key={index} className="flex items-center justify-between p-2 bg-white/[0.03] rounded-lg border border-white/5 hover:border-white/10 transition-colors group">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 mb-0.5">
+                            <div className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: color.stroke }} />
+                            <span className="font-medium text-xs truncate">{box.class_name}</span>
+                          </div>
+                          <p className="text-[10px] text-gray-600 pl-4">
+                            {Math.round(box.width)} × {Math.round(box.height)}
+                          </p>
                         </div>
-                        <p className="text-xs text-muted-foreground">
-                          {Math.round(box.width)} × {Math.round(box.height)}
-                        </p>
+                        <Button
+                          onClick={() => handleDeleteBox(index)}
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                        >
+                          <FiTrash2 className="w-3 h-3" />
+                        </Button>
                       </div>
-                      <Button
-                        onClick={() => handleDeleteBox(index)}
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        <FiTrash2 className="w-3 h-3" />
-                      </Button>
-                    </div>
-                  ))
+                    );
+                  })
                 ) : (
-                  <div className="text-center py-8 px-4 border border-dashed border-border/50 rounded-lg">
-                    <p className="text-sm text-muted-foreground">No annotations yet</p>
+                  <div className="text-center py-6 border border-dashed border-white/5 rounded-lg">
+                    <p className="text-xs text-gray-600">Draw boxes on the image</p>
                   </div>
                 )}
               </div>
             </div>
-
-            {/* Split Info */}
-            {selectedSplit && (
-              <div className="pt-4 border-t border-border">
-                <p className="text-xs text-muted-foreground mb-2">Dataset Split</p>
-                <div className="flex items-center justify-between bg-muted/30 p-2 rounded-md border border-border/50">
-                  <span className="text-sm font-medium capitalize">{selectedSplit}</span>
-                  <Button
-                    onClick={() => setShowSplitDialog(true)}
-                    variant="ghost"
-                    size="xs"
-                    className="h-6 text-xs"
-                  >
-                    Edit
-                  </Button>
-                </div>
-              </div>
-            )}
-
           </div>
         </div>
       </main>
-
+      <AutoLabelModal
+        isOpen={showAutoLabel}
+        onClose={() => setShowAutoLabel(false)}
+        datasetId={datasetId}
+        onComplete={() => {
+          fetchStats();
+          loadImage(currentImageIndex); // Reload current image if it was auto-labeled
+        }}
+      />
     </div>
   );
 }
@@ -796,11 +861,13 @@ export default function AnnotatePage() {
   return (
     <Suspense fallback={
       <div className="min-h-screen bg-black text-foreground flex items-center justify-center">
-        <p className="text-muted-foreground">Loading...</p>
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-muted-foreground">Loading annotation tool...</p>
+        </div>
       </div>
     }>
       <AnnotationToolContent />
     </Suspense>
   );
 }
-

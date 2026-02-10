@@ -1,237 +1,356 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { FiUpload, FiImage, FiCheckCircle, FiLoader, FiZap, FiTarget, FiBox } from "react-icons/fi";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import {
+  FiUpload, FiImage, FiZap, FiCopy, FiBox, FiTrash2,
+  FiLoader, FiClock, FiPlay
+} from "react-icons/fi";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 export default function InferenceTab() {
-  const [selectedFile, setSelectedFile] = useState(null);
-  const [selectedModel, setSelectedModel] = useState("yolov8n.pt");
-  const [confidence, setConfidence] = useState(0.25);
-  const [isLoading, setIsLoading] = useState(false);
-  const [results, setResults] = useState(null);
+  const [image, setImage] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [running, setRunning] = useState(false);
+  const [results, setResults] = useState(null);
+  const [inferenceTime, setInferenceTime] = useState(null);
+  const [model, setModel] = useState("yolov8n");
+  const [confidence, setConfidence] = useState(0.25);
+  const fileInputRef = useRef(null);
+  const canvasRef = useRef(null);
+  const imageObjRef = useRef(null);
 
-  const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setSelectedFile(file);
-      setResults(null);
-    }
-  };
+  const models = [
+    { id: "yolov8n", name: "YOLOv8 Nano", desc: "Fastest · 3.2M params", badge: "Speed" },
+    { id: "yolov8s", name: "YOLOv8 Small", desc: "Balanced · 11.2M params", badge: null },
+    { id: "yolov8m", name: "YOLOv8 Medium", desc: "High accuracy · 25.9M params", badge: null },
+    { id: "yolov8l", name: "YOLOv8 Large", desc: "Very accurate · 43.7M params", badge: "Accuracy" },
+    { id: "yolov8x", name: "YOLOv8 XLarge", desc: "Max precision · 68.2M params", badge: null },
+  ];
 
-  const handleDragOver = (e) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
+  const classColors = [
+    '#6366f1', '#f43f5e', '#10b981', '#f59e0b', '#8b5cf6',
+    '#06b6d4', '#ec4899', '#84cc16', '#ef4444', '#3b82f6',
+  ];
 
-  const handleDragLeave = (e) => {
-    e.preventDefault();
-    setIsDragging(false);
-  };
-
-  const handleDrop = (e) => {
+  const handleDrop = useCallback((e) => {
     e.preventDefault();
     setIsDragging(false);
     const file = e.dataTransfer.files[0];
-    if (file && file.type.startsWith('image/')) {
-      setSelectedFile(file);
+    if (file && file.type.startsWith("image/")) {
+      setImage(file);
+      setImagePreview(URL.createObjectURL(file));
       setResults(null);
+      setInferenceTime(null);
+    }
+  }, []);
+
+  const handleFileSelect = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setImage(file);
+      setImagePreview(URL.createObjectURL(file));
+      setResults(null);
+      setInferenceTime(null);
     }
   };
 
-  const handleInference = async () => {
-    if (!selectedFile) return;
+  // Draw bounding boxes on canvas when results change
+  useEffect(() => {
+    if (!results || !imagePreview) return;
 
-    setIsLoading(true);
+    const img = new Image();
+    img.onload = () => {
+      imageObjRef.current = img;
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext('2d');
+
+      // Draw the image
+      ctx.drawImage(img, 0, 0);
+
+      // Draw detections
+      if (results.detections) {
+        results.detections.forEach((det, idx) => {
+          const color = classColors[idx % classColors.length];
+
+          let x, y, w, h;
+          if (det.bbox_normalized) {
+            // Center-x, center-y, width, height format (normalized)
+            x = (det.bbox_normalized[0] - det.bbox_normalized[2] / 2) * img.naturalWidth;
+            y = (det.bbox_normalized[1] - det.bbox_normalized[3] / 2) * img.naturalHeight;
+            w = det.bbox_normalized[2] * img.naturalWidth;
+            h = det.bbox_normalized[3] * img.naturalHeight;
+          } else if (det.bbox) {
+            [x, y, w, h] = det.bbox;
+          } else {
+            return;
+          }
+
+          // Semi-transparent fill
+          ctx.fillStyle = color + '25';
+          ctx.fillRect(x, y, w, h);
+
+          // Stroke
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 3;
+          ctx.strokeRect(x, y, w, h);
+
+          // Label
+          const label = `${det.class_name} ${Math.round(det.confidence * 100)}%`;
+          ctx.font = 'bold 14px Inter, system-ui, sans-serif';
+          const labelW = ctx.measureText(label).width + 12;
+          const labelH = 24;
+
+          ctx.fillStyle = color;
+          ctx.fillRect(x, y - labelH, labelW, labelH);
+          ctx.fillStyle = '#ffffff';
+          ctx.fillText(label, x + 6, y - 7);
+        });
+      }
+    };
+    img.src = imagePreview;
+  }, [results, imagePreview]);
+
+  const runInference = async () => {
+    if (!image) return;
+    setRunning(true);
+    const startTime = Date.now();
+
     const formData = new FormData();
-    formData.append("file", selectedFile);
+    formData.append("file", image);
+    formData.append("model", model);
     formData.append("confidence", confidence);
-    formData.append("model_name", selectedModel);
 
     try {
       const response = await fetch("http://localhost:8000/api/inference/predict", {
         method: "POST",
         body: formData,
       });
-
       const data = await response.json();
       setResults(data);
+      setInferenceTime(Date.now() - startTime);
+      toast.success(`Detected ${data.num_detections || 0} object(s)`);
     } catch (error) {
-      console.error("Inference error:", error);
-      alert("Error running inference. Make sure the backend is running on port 8000.");
+      toast.error("Inference failed: " + error.message);
     } finally {
-      setIsLoading(false);
+      setRunning(false);
     }
   };
 
   return (
-    <div className="space-y-8 animate-fade-in text-white/90">
+    <div className="space-y-8 animate-fade-in text-gray-100">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-white to-white/60 bg-clip-text text-transparent">Inference Playground</h2>
-          <p className="text-muted-foreground mt-1">Test your models in real-time with drag & drop support.</p>
+          <p className="text-muted-foreground mt-1">Upload an image and run real-time object detection.</p>
         </div>
-        <Badge variant="outline" className="border-indigo-500/30 bg-indigo-500/10 text-indigo-400">
-          <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 mr-2 animate-pulse" />
-          GPU Ready
-        </Badge>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        {/* Left Column: Upload & Config */}
-        <div className="lg:col-span-4 space-y-6">
-          <div className="rounded-2xl bg-card/40 backdrop-blur-md border border-white/5 p-6 shadow-xl space-y-6">
-            <div className="flex items-center gap-3 border-b border-white/5 pb-4">
-              <div className="p-2 bg-indigo-500/10 rounded-lg text-indigo-400">
-                <FiTarget />
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Configuration Panel */}
+        <div className="space-y-6">
+          <Card className="bg-card/40 border-white/5">
+            <CardHeader>
+              <CardTitle className="text-base">Configuration</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <div className="space-y-2">
+                <Label className="text-sm">Model</Label>
+                <Select value={model} onValueChange={setModel}>
+                  <SelectTrigger className="bg-black/30 border-white/10">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {models.map(m => (
+                      <SelectItem key={m.id} value={m.id}>
+                        <div className="flex items-center gap-2">
+                          <span>{m.name}</span>
+                          {m.badge && <Badge variant="outline" className="text-[10px] h-4">{m.badge}</Badge>}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">{models.find(m => m.id === model)?.desc}</p>
               </div>
-              <h3 className="font-semibold text-lg">Configuration</h3>
-            </div>
 
-            {/* Upload Zone */}
-            <div className="space-y-3">
-              <Label className="text-xs uppercase tracking-wider text-muted-foreground">Input Image</Label>
-              <div
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-                className={cn(
-                  "relative border-2 border-dashed border-white/10 rounded-xl p-8 text-center transition-all duration-300 group",
-                  isDragging ? "border-indigo-500 bg-indigo-500/10" : "hover:border-white/20 hover:bg-white/5",
-                  selectedFile ? "border-emerald-500/50 bg-emerald-500/5" : ""
-                )}
-              >
-                <input
-                  id="image-upload"
-                  type="file"
-                  accept="image/*"
-                  onChange={handleFileChange}
-                  className="hidden"
+              <div className="space-y-2">
+                <div className="flex justify-between">
+                  <Label className="text-sm">Confidence</Label>
+                  <span className="text-xs font-mono text-indigo-400">{confidence.toFixed(2)}</span>
+                </div>
+                <Input
+                  type="range"
+                  min="0.05"
+                  max="0.95"
+                  step="0.05"
+                  value={confidence}
+                  onChange={(e) => setConfidence(parseFloat(e.target.value))}
+                  className="accent-indigo-500"
                 />
-                <label htmlFor="image-upload" className="cursor-pointer block w-full h-full">
-                  {selectedFile ? (
-                    <div className="animate-fade-in">
-                      <div className="w-12 h-12 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-3 text-emerald-400">
-                        <FiCheckCircle className="text-2xl" />
-                      </div>
-                      <p className="text-sm font-medium text-emerald-100 truncate max-w-[200px] mx-auto">{selectedFile.name}</p>
-                      <p className="text-xs text-emerald-500/70 mt-1">Click to replace</p>
-                    </div>
-                  ) : (
-                    <div className="group-hover:-translate-y-1 transition-transform duration-300">
-                      <div className="w-12 h-12 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-3 text-muted-foreground group-hover:text-indigo-400 group-hover:bg-indigo-500/20 transition-colors">
-                        <FiUpload className="text-xl" />
-                      </div>
-                      <p className="text-sm font-medium text-gray-300">Drop image here</p>
-                      <p className="text-xs text-muted-foreground mt-1">or click to browse</p>
-                    </div>
-                  )}
-                </label>
               </div>
-            </div>
 
-            {/* Model Select */}
-            <div className="space-y-3">
-              <Label className="text-xs uppercase tracking-wider text-muted-foreground">Model Strategy</Label>
-              <Select value={selectedModel} onValueChange={setSelectedModel}>
-                <SelectTrigger className="bg-black/20 border-white/10 h-10">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-slate-900 border-white/10 text-gray-200">
-                  <SelectItem value="yolov8n.pt">Nano (Edge/Mobile)</SelectItem>
-                  <SelectItem value="yolov8s.pt">Small (Balanced)</SelectItem>
-                  <SelectItem value="yolov8m.pt">Medium (Standard)</SelectItem>
-                  <SelectItem value="yolov8l.pt">Large (High Accuracy)</SelectItem>
-                  <SelectItem value="yolov8x.pt">XLarge (SOTA)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+              <Button
+                onClick={runInference}
+                disabled={!image || running}
+                className="w-full bg-indigo-600 hover:bg-indigo-500 text-white"
+              >
+                {running ? <FiLoader className="animate-spin mr-2" /> : <FiPlay className="mr-2" />}
+                {running ? "Running..." : "Run Inference"}
+              </Button>
+            </CardContent>
+          </Card>
 
-            {/* Confidence Slider */}
-            <div className="space-y-3">
-              <div className="flex justify-between">
-                <Label className="text-xs uppercase tracking-wider text-muted-foreground">Confidence Threshold</Label>
-                <span className="text-xs font-mono text-indigo-400">{(confidence * 100).toFixed(0)}%</span>
-              </div>
-              <Input
-                type="range"
-                min="0"
-                max="1"
-                step="0.05"
-                value={confidence}
-                onChange={(e) => setConfidence(parseFloat(e.target.value))}
-                className="h-2 bg-black/40 accent-indigo-500 cursor-pointer border-0 p-0 rounded-full appearance-none"
-              />
-            </div>
+          {/* Results Summary */}
+          {results && (
+            <Card className="bg-card/40 border-white/5 animate-slide-up">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base">Results</CardTitle>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-gray-400 hover:text-white"
+                    onClick={() => {
+                      navigator.clipboard.writeText(JSON.stringify(results, null, 2));
+                      toast.success("Copied JSON to clipboard");
+                    }}
+                  >
+                    <FiCopy className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-400 flex items-center gap-2"><FiBox /> Objects</span>
+                  <span className="font-bold text-white">{results.num_detections || 0}</span>
+                </div>
+                {inferenceTime !== null && (
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-400 flex items-center gap-2"><FiClock /> Latency</span>
+                    <span className="font-mono text-emerald-400">{inferenceTime}ms</span>
+                  </div>
+                )}
 
-            <Button
-              onClick={handleInference}
-              disabled={!selectedFile || isLoading}
-              className="w-full h-12 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold shadow-lg shadow-indigo-500/20 border-0 rounded-xl transition-all hover:scale-[1.02] active:scale-[0.98]"
-            >
-              {isLoading ? <FiLoader className="mr-2 animate-spin" /> : <FiZap className="mr-2" />}
-              {isLoading ? "Processing..." : "Run Inference"}
-            </Button>
-          </div>
+                {/* Detection list */}
+                {results.detections?.length > 0 && (
+                  <div className="pt-3 border-t border-white/5 space-y-2">
+                    {results.detections.map((det, i) => (
+                      <div key={i} className="flex items-center justify-between text-sm p-2 rounded-lg bg-white/[0.03]">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: classColors[i % classColors.length] }} />
+                          <span className="text-gray-200">{det.class_name}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-16 h-1.5 rounded-full bg-white/10 overflow-hidden">
+                            <div
+                              className="h-full rounded-full transition-all"
+                              style={{
+                                width: `${det.confidence * 100}%`,
+                                backgroundColor: classColors[i % classColors.length]
+                              }}
+                            />
+                          </div>
+                          <span className="text-xs font-mono text-gray-400 w-10 text-right">{Math.round(det.confidence * 100)}%</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
         </div>
 
-        {/* Right Column: Visualization */}
-        <div className="lg:col-span-8 space-y-6">
-          {/* Results Card */}
-          <div className="rounded-2xl bg-card/40 backdrop-blur-md border border-white/5 p-1 min-h-[500px] flex flex-col items-center justify-center relative shadow-2xl">
-            {results ? (
-              <div className="w-full h-full p-4 animate-fade-in group relative">
-                {/* The Image Overlay (Simulated here, normally canvas) */}
-                <div className="relative rounded-xl overflow-hidden border border-white/10 shadow-lg">
-                  <div className="absolute top-4 right-4 z-10">
-                    <Badge variant="secondary" className="bg-black/60 backdrop-blur-md text-white border-white/10 px-3 py-1.5 flex gap-2">
-                      <FiBox className="text-indigo-400" />
-                      {results.num_detections} Detections
-                    </Badge>
-                  </div>
+        {/* Image Display Area */}
+        <div className="lg:col-span-2">
+          {!imagePreview ? (
+            <div
+              onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+              onDragLeave={(e) => { e.preventDefault(); setIsDragging(false); }}
+              onDrop={handleDrop}
+              onClick={() => fileInputRef.current?.click()}
+              className={cn(
+                "h-[500px] border-2 border-dashed rounded-2xl flex flex-col items-center justify-center cursor-pointer transition-all",
+                isDragging
+                  ? "border-indigo-500 bg-indigo-500/5 scale-[0.99]"
+                  : "border-white/10 hover:border-white/20 bg-white/[0.02] hover:bg-white/[0.03]"
+              )}
+            >
+              <div className={cn(
+                "w-20 h-20 rounded-2xl flex items-center justify-center mb-6 transition-all",
+                isDragging ? "bg-indigo-500/20 text-indigo-400 scale-110" : "bg-white/5 text-gray-500"
+              )}>
+                <FiUpload className="text-3xl" />
+              </div>
+              <h3 className="text-lg font-semibold mb-2">{isDragging ? "Drop here" : "Upload an Image"}</h3>
+              <p className="text-sm text-gray-500 mb-6">Drag & drop or click to browse. JPG, PNG, WEBP supported.</p>
+              <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileSelect} className="hidden" />
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="relative rounded-2xl overflow-hidden border border-white/5 bg-black flex items-center justify-center min-h-[400px]">
+                {results ? (
+                  <canvas
+                    ref={canvasRef}
+                    className="max-w-full max-h-[500px]"
+                    style={{ display: 'block', width: 'auto', height: 'auto', maxWidth: '100%', maxHeight: '500px' }}
+                  />
+                ) : (
+                  <img
+                    src={imagePreview}
+                    alt="Preview"
+                    className="max-w-full max-h-[500px] object-contain"
+                  />
+                )}
 
-                  {/* Placeholder for actual output image with boxes drawn */}
-                  <div className="aspect-video bg-black/40 flex items-center justify-center relative">
-                    {/* In a real app, this would be the processed image */}
+                {running && (
+                  <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center">
                     <div className="text-center">
-                      <FiCheckCircle className="text-6xl text-emerald-500 mx-auto mb-4 drop-shadow-[0_0_15px_rgba(16,185,129,0.5)]" />
-                      <p className="text-lg font-medium text-white">Inference Complete</p>
-                      <p className="text-sm text-gray-400 mt-2">Check the raw JSON response below for details</p>
+                      <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+                      <p className="text-sm text-gray-300">Running inference...</p>
                     </div>
                   </div>
-                </div>
+                )}
+              </div>
 
-                {/* Detection List */}
-                <div className="mt-6 grid grid-cols-2 md:grid-cols-3 gap-4">
-                  {results.detections?.map((det, idx) => (
-                    <div key={idx} className="p-3 rounded-lg bg-white/5 border border-white/5 hover:bg-white/10 transition-colors flex items-center justify-between">
-                      <span className="font-semibold capitalize text-indigo-200">{det.class_name}</span>
-                      <Badge variant="outline" className="text-xs border-indigo-500/30 text-indigo-400 bg-indigo-500/10">
-                        {(det.confidence * 100).toFixed(0)}%
-                      </Badge>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <div className="text-center p-8">
-                <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-6 border border-white/5 shadow-inner">
-                  <FiImage className="text-4xl text-white/20" />
-                </div>
-                <h3 className="text-xl font-medium text-white/80">Ready for Analysis</h3>
-                <p className="text-muted-foreground mt-2 max-w-sm mx-auto">
-                  Select a model and upload an image to see YOLO object detection in action.
+              <div className="flex justify-between items-center">
+                <p className="text-sm text-muted-foreground">
+                  {results ? `Detected ${results.num_detections || 0} objects` : "Ready to run inference"}
                 </p>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-white/10"
+                    onClick={() => { setImage(null); setImagePreview(null); setResults(null); setInferenceTime(null); }}
+                  >
+                    <FiTrash2 className="mr-2" /> Clear
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={runInference}
+                    disabled={running}
+                    className="bg-indigo-600 hover:bg-indigo-500"
+                  >
+                    {running ? <FiLoader className="animate-spin mr-2" /> : <FiZap className="mr-2" />}
+                    Re-run
+                  </Button>
+                </div>
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

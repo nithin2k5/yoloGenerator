@@ -291,7 +291,7 @@ class AnnotationService:
     @staticmethod
     def save_annotation(annotation_id: str, dataset_id: str, image_id: str,
                        image_name: str, width: int, height: int, boxes: List[Dict],
-                       split: Optional[str] = None) -> bool:
+                       split: Optional[str] = None, status: str = "annotated") -> bool:
         """Save annotation to database"""
         connection = get_db_connection()
         if not connection:
@@ -307,15 +307,15 @@ class AnnotationService:
                 # Update existing
                 cursor.execute("""
                     UPDATE annotations
-                    SET boxes = %s, width = %s, height = %s, split = %s, updated_at = CURRENT_TIMESTAMP
+                    SET boxes = %s, width = %s, height = %s, split = %s, status = %s, updated_at = CURRENT_TIMESTAMP
                     WHERE id = %s
-                """, (json.dumps(boxes), width, height, split, annotation_id))
+                """, (json.dumps(boxes), width, height, split, status, annotation_id))
             else:
                 # Insert new
                 cursor.execute("""
-                    INSERT INTO annotations (id, dataset_id, image_id, image_name, width, height, boxes, split)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                """, (annotation_id, dataset_id, image_id, image_name, width, height, json.dumps(boxes), split))
+                    INSERT INTO annotations (id, dataset_id, image_id, image_name, width, height, boxes, split, status)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """, (annotation_id, dataset_id, image_id, image_name, width, height, json.dumps(boxes), split, status))
             
             connection.commit()
             
@@ -346,7 +346,7 @@ class AnnotationService:
             cursor = connection.cursor(dictionary=True)
             annotation_id = f"{dataset_id}_{image_id}"
             cursor.execute("""
-                SELECT id, dataset_id, image_id, image_name, width, height, boxes, split, created_at, updated_at
+                SELECT id, dataset_id, image_id, image_name, width, height, boxes, split, status, created_at, updated_at
                 FROM annotations
                 WHERE id = %s
             """, (annotation_id,))

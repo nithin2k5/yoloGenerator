@@ -141,12 +141,14 @@ def create_tables():
                 height INT NOT NULL,
                 boxes JSON NOT NULL,
                 split ENUM('train', 'val', 'test') NULL,
+                status ENUM('unlabeled', 'predicted', 'annotated', 'reviewed') DEFAULT 'annotated',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                 FOREIGN KEY (dataset_id) REFERENCES datasets(id) ON DELETE CASCADE,
                 FOREIGN KEY (image_id) REFERENCES dataset_images(id) ON DELETE CASCADE,
                 INDEX idx_dataset_id (dataset_id),
-                INDEX idx_image_id (image_id)
+                INDEX idx_image_id (image_id),
+                INDEX idx_status (status)
             )
         """)
         print("✓ Table 'annotations' ready")

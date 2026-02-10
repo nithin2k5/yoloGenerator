@@ -38,6 +38,7 @@ class BoundingBox(BaseModel):
     height: float
     class_id: int
     class_name: str
+    confidence: Optional[float] = 1.0
 
 class ImageAnnotation(BaseModel):
     image_id: str
@@ -45,6 +46,7 @@ class ImageAnnotation(BaseModel):
     width: int
     height: int
     boxes: List[BoundingBox]
+    status: Optional[str] = "annotated"  # unlabeled, predicted, annotated, reviewed
 
 class Dataset(BaseModel):
     name: str
@@ -286,8 +288,8 @@ async def save_annotation(request: dict):
     width = request.get("width")
     height = request.get("height")
     boxes = request.get("boxes", [])
-    split = request.get("split")  # train, val, test, or None
-    
+    status = request.get("status", "annotated") # Default to annotated if manually saved
+
     # Validate split if provided
     if split and split not in ["train", "val", "test"]:
         raise HTTPException(status_code=400, detail="Split must be 'train', 'val', or 'test'")
@@ -302,7 +304,8 @@ async def save_annotation(request: dict):
         width=width,
         height=height,
         boxes=boxes,
-        split=split
+        split=split,
+        status=status
     )
     
     if not success:
@@ -317,6 +320,7 @@ async def save_annotation(request: dict):
         "height": height,
         "boxes": boxes,
         "split": split,
+        "status": status,
         "updated_at": datetime.now().isoformat()
     }
     
@@ -629,23 +633,39 @@ async def get_dataset_stats(dataset_id: str):
         total_images = len(dataset.get("images", []))
         annotated_images = len([img for img in dataset.get("images", []) if img.get("annotated", False)])
         
-        # Count annotations per class
+        # Count annotations per class and status
         class_counts = {cls: 0 for cls in dataset.get("classes", [])}
+        status_counts = {"unlabeled": 0, "predicted": 0, "annotated": 0, "reviewed": 0}
+        
         for key, annotation in annotations_db.items():
             if key.startswith(f"{dataset_id}_"):
+                # Status count
+                status = annotation.get("status", "annotated")
+                status_counts[status] = status_counts.get(status, 0) + 1
+                
+                # Class count
                 for box in annotation.get("boxes", []):
                     class_name = box.get("class_name", "")
                     if class_name in class_counts:
                         class_counts[class_name] += 1
+                        
+        # Unlabeled = Total - (Annotated + Predicted + Reviewed) effectively
+        # But our 'annotated_images' flag is simple.
+        # Let's trust status_counts more if available
+        status_counts["unlabeled"] = total_images - sum(status_counts.values())
+        if status_counts["unlabeled"] < 0: status_counts["unlabeled"] = 0
         
         return {
             "dataset_id": dataset_id,
             "name": dataset.get("name", ""),
             "total_images": total_images,
             "annotated_images": annotated_images,
-            "unannotated_images": total_images - annotated_images,
+            "unannotated_images": status_counts["unlabeled"],
+            "reviewed_images": status_counts.get("reviewed", 0),
+            "predicted_images": status_counts.get("predicted", 0),
             "total_classes": len(dataset.get("classes", [])),
             "class_counts": class_counts,
+            "status_counts": status_counts,
             "completion_percentage": (annotated_images / total_images * 100) if total_images > 0 else 0
         }
     
@@ -684,6 +704,144 @@ async def update_image_split(dataset_id: str, image_id: str, request: dict):
         "image_id": image_id,
         "split": split
     })
+
+@router.post("/annotations/auto-label")
+async def auto_label_images(
+    dataset_id: str = Form(...),
+    image_ids: str = Form(...),  # Comma-separated or "all"
+    model_name: str = Form("yolov8n.pt"),
+    confidence: float = Form(0.25),
+    job_id: Optional[str] = Form(None)
+):
+    """
+    Auto-label images using a pre-trained model
+    """
+    from app.routes.inference import inference_model, YOLOInference
+    
+    if dataset_id not in datasets_db:
+        # Try waiting for DB load
+        db_dataset = DatasetService.get_dataset(dataset_id)
+        if not db_dataset:
+            raise HTTPException(status_code=404, detail="Dataset not found")
+        datasets_db[dataset_id] = db_dataset
+
+    # Initialize model if needed (reusing inference logic)
+    model_path = model_name
+    if job_id:
+        weights_path = Path("runs/detect") / f"job_{job_id}" / "weights" / "best.pt"
+        if weights_path.exists():
+            model_path = str(weights_path)
+            
+    # We create a temporary local inference instance to avoid global state conflicts
+    # In prod, this should use a worker queue
+    local_model = YOLOInference(model_path)
+    
+    # Get images to label
+    target_images = []
+    dataset = datasets_db[dataset_id]
+    
+    if image_ids == "all":
+        target_images = [img for img in dataset.get("images", [])] # All images
+    else:
+        ids = image_ids.split(",")
+        target_images = [img for img in dataset.get("images", []) if img["id"] in ids]
+        
+    count = 0
+    for img in target_images:
+        # Skip if already reviewed
+        # Check current annotation status
+        ann_id = f"{dataset_id}_{img['id']}"
+        curr_ann = annotations_db.get(ann_id)
+        if curr_ann and curr_ann.get("status") == "reviewed":
+            continue
+            
+        image_path = Path(img["path"])
+        if not image_path.exists():
+            continue
+            
+        # Run inference
+        detections = local_model.predict(str(image_path), conf_threshold=confidence)
+        
+        # Convert detections to BoundingBox format
+        boxes = []
+        width = 0
+        height = 0
+        
+        # Get image dimensions
+        with Image.open(image_path) as pil_img:
+            width, height = pil_img.size
+            
+        for det in detections:
+            # YOLOInference returns xyxy and xywhn
+            # BoundingBox needs x, y, width, height (pixel coords)
+            # We use the absolute bbox from xyxy to calculate x,y,w,h in user format
+            # User format seems to be top-left x,y and w,h (based on how it's saved)
+            
+            bbox = det["bbox"] # [x1, y1, x2, y2]
+            w = bbox[2] - bbox[0]
+            h = bbox[3] - bbox[1]
+            x = bbox[0]
+            y = bbox[1]
+            
+            # Find class index
+            class_name = det["class_name"]
+            class_id = -1
+            if class_name in dataset["classes"]:
+                class_id = dataset["classes"].index(class_name)
+            else:
+                # Try to map COCO classes to dataset classes if generic model
+                # This is a simple heuristic matching
+                for idx, cls in enumerate(dataset["classes"]):
+                    if cls.lower() in class_name.lower():
+                        class_id = idx
+                        break
+            
+            if class_id != -1:
+                boxes.append({
+                    "x": x,
+                    "y": y,
+                    "width": w,
+                    "height": h,
+                    "class_id": class_id,
+                    "class_name": dataset["classes"][class_id],
+                    "confidence": det["confidence"]
+                })
+        
+        if boxes:
+            # Save annotation with status="predicted"
+            annotation_id = f"{dataset_id}_{img['id']}"
+            
+            # Update DB
+            AnnotationService.save_annotation(
+                annotation_id=annotation_id,
+                dataset_id=dataset_id,
+                image_id=img['id'],
+                image_name=img['filename'],
+                width=width,
+                height=height,
+                boxes=boxes,
+                split=img.get("split"),
+                status="predicted"
+            )
+            
+            # Update Memory
+            annotations_db[annotation_id] = {
+                "dataset_id": dataset_id,
+                "image_id": img['id'],
+                "image_name": img['filename'],
+                "width": width,
+                "height": height,
+                "boxes": boxes,
+                "split": img.get("split"),
+                "status": "predicted",
+                "updated_at": datetime.now().isoformat()
+            }
+            
+            # Update Image status
+            img["annotated"] = True
+            count += 1
+
+    return {"success": True, "labeled_count": count}
 
 @router.get("/image/{dataset_id}/{image_filename}")
 async def serve_image(dataset_id: str, image_filename: str):

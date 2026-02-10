@@ -2,9 +2,13 @@
 
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { FiDatabase, FiDownload, FiTrash2, FiInfo, FiRefreshCw, FiBox, FiClock, FiHardDrive } from "react-icons/fi";
+import { cn } from "@/lib/utils";
+import { toast } from 'sonner';
+import {
+  FiDatabase, FiDownload, FiTrash2, FiRefreshCw,
+  FiBox, FiClock, FiHardDrive, FiActivity
+} from "react-icons/fi";
 
 export default function ModelsTab() {
   const [models, setModels] = useState([]);
@@ -18,21 +22,7 @@ export default function ModelsTab() {
       setModels(data.models || []);
     } catch (error) {
       console.error("Error fetching models:", error);
-      // Fallback for demo
-      setModels([
-        {
-          name: "yolov8n-custom-v1",
-          path: "/runs/detect/yolov8n-custom-v1/weights/best.pt",
-          size: 6291456,
-          created: Date.now() / 1000
-        },
-        {
-          name: "defect-detection-prod",
-          path: "/runs/detect/defect-detection-prod/weights/best.pt",
-          size: 12582912,
-          created: Date.now() / 1000 - 86400
-        }
-      ]);
+      setModels([]);
     } finally {
       setIsLoading(false);
     }
@@ -54,8 +44,9 @@ export default function ModelsTab() {
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
+      toast.success(`Downloading ${modelName}...`);
     } catch (error) {
-      alert("Download failed. Backend unreachable.");
+      toast.error("Download failed. Backend may be unreachable.");
     }
   };
 
@@ -63,9 +54,14 @@ export default function ModelsTab() {
     if (!confirm(`Delete model "${modelName}" permanently?`)) return;
     try {
       const response = await fetch(`http://localhost:8000/api/models/delete/${modelName}`, { method: "DELETE" });
-      if (response.ok) fetchModels();
+      if (response.ok) {
+        toast.success(`"${modelName}" deleted`);
+        fetchModels();
+      } else {
+        toast.error("Delete failed");
+      }
     } catch (error) {
-      alert("Delete failed.");
+      toast.error("Delete failed: " + error.message);
     }
   };
 
@@ -90,14 +86,19 @@ export default function ModelsTab() {
           className="border-white/10 bg-white/5 hover:bg-white/10 text-white"
         >
           <FiRefreshCw className={`mr-2 ${isLoading ? "animate-spin" : ""}`} />
-          Refresh Registry
+          Refresh
         </Button>
       </div>
 
-      {/* Models Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {models.length > 0 ? (
-          models.map((model, index) => (
+      {isLoading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[...Array(3)].map((_, i) => (
+            <div key={i} className="h-52 rounded-2xl bg-white/5 animate-shimmer border border-white/5" />
+          ))}
+        </div>
+      ) : models.length > 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {models.map((model, index) => (
             <div
               key={index}
               className="group relative rounded-2xl bg-card/40 backdrop-blur-md border border-white/5 hover:border-indigo-500/30 hover:bg-white/5 transition-all duration-300 flex flex-col overflow-hidden shadow-lg"
@@ -130,10 +131,19 @@ export default function ModelsTab() {
                     </div>
                     <span className="text-gray-200">{new Date(model.created * 1000).toLocaleDateString()}</span>
                   </div>
+                  {model.metrics && (
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <FiActivity className="text-gray-500" />
+                        <span>mAP@50</span>
+                      </div>
+                      <span className="text-emerald-400 font-mono">{Number(model.metrics?.mAP50 || 0).toFixed(3)}</span>
+                    </div>
+                  )}
                 </div>
               </div>
 
-              <div className="p-4 bg-white/5 border-t border-white/5 flex items-center gap-3">
+              <div className="p-4 bg-white/[0.02] border-t border-white/5 flex items-center gap-3">
                 <Button
                   onClick={() => handleDownload(model.name)}
                   className="flex-1 bg-white text-black hover:bg-gray-200"
@@ -145,31 +155,21 @@ export default function ModelsTab() {
                   onClick={() => handleDelete(model.name)}
                   variant="ghost"
                   size="icon"
-                  className="text-gray-400 hover:text-red-400 hover:bg-red-400/10"
+                  className="text-gray-400 hover:text-red-400 hover:bg-red-400/10 h-8 w-8"
                 >
-                  <FiTrash2 />
+                  <FiTrash2 className="w-3.5 h-3.5" />
                 </Button>
               </div>
             </div>
-          ))
-        ) : (
-          <div className="col-span-full py-20 text-center rounded-2xl border border-dashed border-white/10 bg-white/5">
-            <div className="w-16 h-16 rounded-full bg-indigo-500/10 flex items-center justify-center mx-auto mb-4 text-indigo-400">
-              <FiDatabase className="text-3xl" />
-            </div>
-            <h3 className="text-xl font-bold mb-2">Registry Empty</h3>
-            <p className="text-muted-foreground">Train your first model to see artifacts here.</p>
+          ))}
+        </div>
+      ) : (
+        <div className="py-20 text-center rounded-2xl border border-dashed border-white/10 bg-white/[0.02]">
+          <div className="w-16 h-16 rounded-full bg-indigo-500/10 flex items-center justify-center mx-auto mb-4 text-indigo-400">
+            <FiDatabase className="text-3xl" />
           </div>
-        )}
-      </div>
-
-      {!isLoading && models.length > 0 && (
-        <div className="rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-4 flex items-start gap-3">
-          <FiInfo className="text-indigo-400 mt-1 flex-shrink-0" />
-          <div className="text-sm text-indigo-200/80">
-            <strong className="text-indigo-100 block mb-1">Deployment Note</strong>
-            Models can be directly referenced in the Inference API using their filename (e.g., <code>model_name.pt</code>). Ensure consistency between training config and inference requests.
-          </div>
+          <h3 className="text-xl font-bold mb-2">Registry Empty</h3>
+          <p className="text-muted-foreground">Train your first model to see artifacts here.</p>
         </div>
       )}
     </div>
