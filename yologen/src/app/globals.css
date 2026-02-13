@@ -364,3 +364,133 @@
 .animation-delay-4000 {
   animation-delay: 4s;
 }
+
+/* New Utilities for Landing Page */
+.text-gradient {
+  background: linear-gradient(to right, #818cf8, #c084fc, #38bdf8);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.text-gradient-gold {
+  background: linear-gradient(to right, #fbbf24, #f59e0b, #d97706);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.bg-grid-white {
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' width='32' height='32' fill='none' stroke='rgba(255, 255, 255, 0.05)'%3e%3cpath d='M0 .5H31.5V32'/%3e%3c/svg%3e");
+}
+
+.perspective-1000 {
+  perspective: 1000px;
+}
+
+.rotate-y-12 {
+  transform: rotateY(12deg);
+}
+
+.rotate-x-12 {
+  transform: rotateX(12deg);
+}
+
+.preserve-3d {
+  transform-style: preserve-3d;
+}
+
+/* Mouse spotlight effect */
+.spotlight {
+  background: radial-gradient(600px circle at var(--mouse-x, 50%) var(--mouse-y, 50%),
+      rgba(255, 255, 255, 0.06),
+      transparent 40%);
+}
+
+/* Glitch Effect */
+.glitch-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.glitch {
+  position: relative;
+  color: white;
+}
+
+.glitch::before,
+.glitch::after {
+  content: attr(data-text);
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0.8;
+}
+
+.glitch::before {
+  color: #0ff;
+  clip-path: polygon(0 0, 100% 0, 100% 45%, 0 45%);
+  transform: translate(-2px, -2px);
+  animation: glitch-anim-1 2s infinite linear alternate-reverse;
+}
+
+.glitch::after {
+  color: #f0f;
+  clip-path: polygon(0 55%, 100% 55%, 100% 100%, 0 100%);
+  transform: translate(2px, 2px);
+  animation: glitch-anim-2 2.5s infinite linear alternate-reverse;
+}
+
+@keyframes glitch-anim-1 {
+  0% {
+    transform: translate(-2px, -2px);
+  }
+
+  20% {
+    transform: translate(2px, 2px);
+  }
+
+  40% {
+    transform: translate(-2px, 2px);
+  }
+
+  60% {
+    transform: translate(2px, -2px);
+  }
+
+  80% {
+    transform: translate(0);
+  }
+
+  100% {
+    transform: translate(0);
+  }
+}
+
+@keyframes glitch-anim-2 {
+  0% {
+    transform: translate(2px, 2px);
+  }
+
+  20% {
+    transform: translate(-2px, -2px);
+  }
+
+  40% {
+    transform: translate(2px, -2px);
+  }
+
+  60% {
+    transform: translate(-2px, 2px);
+  }
+
+  80% {
+    transform: translate(0);
+  }
+
+  100% {
+    transform: translate(0);
+  }
+}

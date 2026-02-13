@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
-import { FiLayers, FiRefreshCw, FiCheck } from "react-icons/fi";
+import { Layers, RefreshCw, Check } from "lucide-react";
 import { toast } from 'sonner';
 import { API_ENDPOINTS } from "@/lib/config";
 
@@ -61,7 +61,7 @@ export default function ProjectGenerate({ dataset, stats, onGenerate }) {
                     <p className="text-muted-foreground text-sm">Apply augmentations and freeze your dataset for training.</p>
                 </div>
                 <Button onClick={handleGenerate} disabled={generating}>
-                    {generating ? <FiRefreshCw className="mr-2 animate-spin" /> : <FiLayers className="mr-2" />}
+                    {generating ? <RefreshCw className="mr-2 animate-spin" /> : <Layers className="mr-2" />}
                     {generating ? "Generating..." : "Generate Version"}
                 </Button>
             </div>

@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { FiUpload, FiImage, FiCheckCircle, FiLoader, FiTerminal } from "react-icons/fi";
+import { Upload, Image, CheckCircle, Loader, Terminal } from "lucide-react";
 import { API_ENDPOINTS } from "@/lib/config";
 import { toast } from 'sonner';
 
@@ -83,7 +83,7 @@ export default function ProjectDeploy({ dataset }) {
         return (
             <div className="h-full flex flex-col items-center justify-center text-center p-8">
                 <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mb-4">
-                    <FiTerminal className="text-2xl text-muted-foreground" />
+                    <Terminal className="text-2xl text-muted-foreground" />
                 </div>
                 <h3 className="text-xl font-semibold mb-2">No Trained Models Available</h3>
                 <p className="text-muted-foreground max-w-md mb-6">
@@ -173,7 +173,7 @@ print(response.json())`}
                                         onChange={handleFileChange}
                                         className="absolute inset-0 opacity-0 cursor-pointer"
                                     />
-                                    <FiUpload className="mx-auto text-4xl text-muted-foreground mb-4" />
+                                    <Upload className="mx-auto text-4xl text-muted-foreground mb-4" />
                                     <p className="font-medium">Click to upload an image</p>
                                     <p className="text-xs text-muted-foreground mt-1">Supports JPG, PNG</p>
                                 </div>
@@ -216,7 +216,7 @@ print(response.json())`}
                                                 Clear
                                             </Button>
                                             <Button onClick={handleInference} disabled={isLoading}>
-                                                {isLoading ? <FiLoader className="animate-spin mr-2" /> : <FiCheckCircle className="mr-2" />}
+                                                {isLoading ? <Loader className="animate-spin mr-2" /> : <CheckCircle className="mr-2" />}
                                                 Run Model
                                             </Button>
                                         </div>

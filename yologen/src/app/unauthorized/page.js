@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { FiAlertTriangle, FiHome, FiArrowLeft } from "react-icons/fi";
+import { AlertTriangle, Home, ArrowLeft } from "lucide-react";
 
 export default function UnauthorizedPage() {
   const router = useRouter();
@@ -13,7 +13,7 @@ export default function UnauthorizedPage() {
       <Card className="max-w-md w-full bg-card/60 backdrop-blur-xl border-border/50">
         <CardHeader className="text-center">
           <div className="w-20 h-20 rounded-full bg-destructive/10 border-2 border-destructive/30 flex items-center justify-center mx-auto mb-4">
-            <FiAlertTriangle className="text-4xl text-destructive" />
+            <AlertTriangle className="text-4xl text-destructive" />
           </div>
           <CardTitle className="text-2xl">Access Denied</CardTitle>
           <p className="mt-2 text-center text-sm text-gray-600">
@@ -34,7 +34,7 @@ export default function UnauthorizedPage() {
               variant="outline"
               className="flex-1"
             >
-              <FiArrowLeft className="mr-2" />
+              <ArrowLeft className="mr-2" />
               Go Back
             </Button>
             <Button

@@ -1,7 +1,7 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { FiZap, FiCpu, FiDatabase, FiTrendingUp, FiActivity, FiClock, FiCheck, FiArrowRight } from "react-icons/fi";
+import { Zap, Cpu, Database, TrendingUp, Activity, Clock, Check, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -32,7 +32,9 @@ export default function DashboardStats({ onNavigate }) {
 
       let totalDatasets = 0, totalImages = 0, totalAnnotated = 0, totalReviewed = 0;
       if (datasetsRes.status === 'fulfilled' && datasetsRes.value.ok) {
-        const datasets = await datasetsRes.value.json();
+        const rawDatasets = await datasetsRes.value.json();
+        // Handle cases where API returns { datasets: [...] } or just [...]
+        const datasets = Array.isArray(rawDatasets) ? rawDatasets : (rawDatasets.datasets || []);
         totalDatasets = datasets.length;
 
         const statsPromises = datasets.map(ds =>
@@ -70,35 +72,35 @@ export default function DashboardStats({ onNavigate }) {
       title: "Datasets",
       value: liveStats.totalDatasets.toString(),
       sub: `${liveStats.totalImages} images total`,
-      icon: FiDatabase,
+      icon: Database,
       color: "text-blue-400 bg-blue-400/10",
     },
     {
       title: "Annotated",
       value: liveStats.totalAnnotated.toString(),
       sub: `${annotationPercent}% complete`,
-      icon: FiActivity,
+      icon: Activity,
       color: "text-emerald-400 bg-emerald-400/10",
     },
     {
       title: "Reviewed",
       value: (liveStats.totalReviewed || 0).toString(),
       sub: "Quality checked",
-      icon: FiCheck,
+      icon: Check,
       color: "text-indigo-400 bg-indigo-400/10",
     },
     {
       title: "Models",
       value: liveStats.totalModels.toString(),
       sub: "In registry",
-      icon: FiCpu,
+      icon: Cpu,
       color: "text-purple-400 bg-purple-400/10",
     },
     {
       title: "Pipeline",
       value: annotationPercent >= 80 ? "Ready" : "Building",
       sub: annotationPercent >= 80 ? "Ready to train" : "Need more labels",
-      icon: FiTrendingUp,
+      icon: TrendingUp,
       color: "text-amber-400 bg-amber-400/10",
     }
   ];
@@ -138,7 +140,7 @@ export default function DashboardStats({ onNavigate }) {
             <div>
               <div className="flex items-center gap-3 mb-4">
                 <div className="p-2 bg-indigo-500/20 rounded-lg text-indigo-400">
-                  <FiZap />
+                  <Zap />
                 </div>
                 <h3 className="text-lg font-bold">Quick Inference</h3>
               </div>
@@ -151,7 +153,7 @@ export default function DashboardStats({ onNavigate }) {
               onClick={() => onNavigate && onNavigate("inference")}
             >
               Start Detection
-              <FiArrowRight className="ml-2" />
+              <ArrowRight className="ml-2" />
             </Button>
           </div>
         </div>
@@ -161,7 +163,7 @@ export default function DashboardStats({ onNavigate }) {
             <div>
               <div className="flex items-center gap-3 mb-4">
                 <div className="p-2 bg-purple-500/20 rounded-lg text-purple-400">
-                  <FiCpu />
+                  <Cpu />
                 </div>
                 <h3 className="text-lg font-bold">Start New Training</h3>
               </div>
@@ -175,7 +177,7 @@ export default function DashboardStats({ onNavigate }) {
               onClick={() => onNavigate && onNavigate("datasets")}
             >
               Create Dataset
-              <FiArrowRight className="ml-2" />
+              <ArrowRight className="ml-2" />
             </Button>
           </div>
         </div>
@@ -190,9 +192,9 @@ export default function DashboardStats({ onNavigate }) {
         <div className="divide-y divide-white/5">
           {liveStats.totalDatasets > 0 ? (
             [
-              { action: `${liveStats.totalAnnotated} annotations saved`, model: `Across ${liveStats.totalDatasets} dataset(s)`, time: "Now", status: "success", icon: FiCheck },
-              { action: `${liveStats.totalModels} model(s) in registry`, model: "Ready for inference", time: "Latest", status: liveStats.totalModels > 0 ? "success" : "pending", icon: liveStats.totalModels > 0 ? FiCheck : FiClock },
-              { action: `${liveStats.totalImages} images uploaded`, model: `${annotationPercent}% annotated`, time: "Total", status: "success", icon: FiCheck },
+              { action: `${liveStats.totalAnnotated} annotations saved`, model: `Across ${liveStats.totalDatasets} dataset(s)`, time: "Now", status: "success", icon: Check },
+              { action: `${liveStats.totalModels} model(s) in registry`, model: "Ready for inference", time: "Latest", status: liveStats.totalModels > 0 ? "success" : "pending", icon: liveStats.totalModels > 0 ? Check : Clock },
+              { action: `${liveStats.totalImages} images uploaded`, model: `${annotationPercent}% annotated`, time: "Total", status: "success", icon: Check },
             ].map((activity, index) => (
               <div key={index} className="flex items-center justify-between p-4 hover:bg-white/5 transition-colors">
                 <div className="flex items-center gap-4">

@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { FiZap, FiAlertCircle } from "react-icons/fi";
+import { Zap, AlertCircle } from "lucide-react";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -60,7 +60,7 @@ export default function RegisterPage() {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <FiZap className="text-4xl text-primary mx-auto mb-4" />
+          <Zap className="text-4xl text-primary mx-auto mb-4" />
           <h1 className="text-2xl font-bold">Create Account</h1>
           <p className="text-muted-foreground text-sm">Join YOLO Generator today</p>
         </div>
@@ -77,7 +77,7 @@ export default function RegisterPage() {
             <form onSubmit={handleSubmit} className="space-y-4">
               {error && (
                 <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/30 flex items-center gap-2 text-destructive text-sm">
-                  <FiAlertCircle className="flex-shrink-0" />
+                  <AlertCircle className="flex-shrink-0" />
                   <p>{error}</p>
                 </div>
               )}

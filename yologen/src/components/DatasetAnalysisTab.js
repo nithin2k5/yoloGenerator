@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { FiRefreshCw, FiAlertTriangle, FiCheckCircle, FiInfo, FiTrendingUp, FiBarChart2, FiTarget, FiSettings } from "react-icons/fi";
+import { RefreshCw, AlertTriangle, CheckCircle, Info, TrendingUp, BarChart2, Target, Settings } from "lucide-react";
 
 export default function DatasetAnalysisTab({ datasetId }) {
   const [analysis, setAnalysis] = useState(null);
@@ -20,14 +20,14 @@ export default function DatasetAnalysisTab({ datasetId }) {
 
   const fetchAnalysis = async () => {
     if (!datasetId) return;
-    
+
     setLoading(true);
     setError(null);
-    
+
     try {
       const response = await fetch(`http://localhost:8000/api/annotations/datasets/${datasetId}/analyze`);
       const data = await response.json();
-      
+
       if (data.success) {
         setAnalysis(data.analysis);
       } else {
@@ -64,7 +64,7 @@ export default function DatasetAnalysisTab({ datasetId }) {
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center py-12">
-        <FiRefreshCw className="text-4xl mb-4 animate-spin text-primary" />
+        <RefreshCw className="text-4xl mb-4 animate-spin text-primary" />
         <p className="text-sm text-muted-foreground">Analyzing dataset...</p>
       </div>
     );
@@ -73,10 +73,10 @@ export default function DatasetAnalysisTab({ datasetId }) {
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center py-12">
-        <FiAlertTriangle className="text-4xl mb-4 text-destructive" />
+        <AlertTriangle className="text-4xl mb-4 text-destructive" />
         <p className="text-sm text-destructive mb-4">{error}</p>
         <Button onClick={fetchAnalysis} variant="outline">
-          <FiRefreshCw className="mr-2" />
+          <RefreshCw className="mr-2" />
           Retry
         </Button>
       </div>
@@ -100,7 +100,7 @@ export default function DatasetAnalysisTab({ datasetId }) {
           <p className="text-muted-foreground">{analysis.dataset_name}</p>
         </div>
         <Button onClick={fetchAnalysis} variant="outline" disabled={loading}>
-          <FiRefreshCw className={`mr-2 ${loading ? 'animate-spin' : ''}`} />
+          <RefreshCw className={`mr-2 ${loading ? 'animate-spin' : ''}`} />
           Refresh
         </Button>
       </div>
@@ -109,7 +109,7 @@ export default function DatasetAnalysisTab({ datasetId }) {
       <Card className="bg-card border-border">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <FiTarget className="text-primary" />
+            <Target className="text-primary" />
             Overall Quality Score
           </CardTitle>
         </CardHeader>
@@ -123,8 +123,8 @@ export default function DatasetAnalysisTab({ datasetId }) {
             </div>
             <Progress value={analysis.overall_quality_score} className="h-3" />
             <Badge className={getQualityBadge(analysis.overall_quality_score)}>
-              {analysis.overall_quality_score >= 80 ? "Excellent" : 
-               analysis.overall_quality_score >= 60 ? "Good" : "Needs Improvement"}
+              {analysis.overall_quality_score >= 80 ? "Excellent" :
+                analysis.overall_quality_score >= 60 ? "Good" : "Needs Improvement"}
             </Badge>
           </div>
         </CardContent>
@@ -137,7 +137,7 @@ export default function DatasetAnalysisTab({ datasetId }) {
             <Card className="bg-yellow-500/10 border-yellow-500/30">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-yellow-500">
-                  <FiAlertTriangle />
+                  <AlertTriangle />
                   Warnings ({analysis.warnings.length})
                 </CardTitle>
               </CardHeader>
@@ -145,7 +145,7 @@ export default function DatasetAnalysisTab({ datasetId }) {
                 <ul className="space-y-2">
                   {analysis.warnings.map((warning, idx) => (
                     <li key={idx} className="text-sm flex items-start gap-2">
-                      <FiAlertTriangle className="text-yellow-500 mt-0.5 flex-shrink-0" />
+                      <AlertTriangle className="text-yellow-500 mt-0.5 flex-shrink-0" />
                       <span>{warning}</span>
                     </li>
                   ))}
@@ -158,7 +158,7 @@ export default function DatasetAnalysisTab({ datasetId }) {
             <Card className="bg-blue-500/10 border-blue-500/30">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-blue-500">
-                  <FiInfo />
+                  <Info />
                   Recommendations ({analysis.recommendations.length})
                 </CardTitle>
               </CardHeader>
@@ -166,7 +166,7 @@ export default function DatasetAnalysisTab({ datasetId }) {
                 <ul className="space-y-2">
                   {analysis.recommendations.map((rec, idx) => (
                     <li key={idx} className="text-sm flex items-start gap-2">
-                      <FiInfo className="text-blue-500 mt-0.5 flex-shrink-0" />
+                      <Info className="text-blue-500 mt-0.5 flex-shrink-0" />
                       <span>{rec}</span>
                     </li>
                   ))}
@@ -260,7 +260,7 @@ export default function DatasetAnalysisTab({ datasetId }) {
       <Card className="bg-card border-border">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <FiBarChart2 className="text-primary" />
+            <BarChart2 className="text-primary" />
             Class Distribution
           </CardTitle>
           <CardDescription>Number of annotations per class</CardDescription>
@@ -339,7 +339,7 @@ export default function DatasetAnalysisTab({ datasetId }) {
       <Card className="bg-card border-border">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <FiSettings className="text-primary" />
+            <Settings className="text-primary" />
             Training Recommendations
           </CardTitle>
           <CardDescription>Suggested configuration based on dataset analysis</CardDescription>
@@ -379,132 +379,132 @@ export default function DatasetAnalysisTab({ datasetId }) {
       </Card>
 
       {/* Issues */}
-      {(analysis.corrupt_images?.length > 0 || 
-        analysis.duplicate_images?.length > 0 || 
+      {(analysis.corrupt_images?.length > 0 ||
+        analysis.duplicate_images?.length > 0 ||
         analysis.label_mismatches?.length > 0 ||
         analysis.invalid_boxes?.length > 0 ||
         analysis.empty_annotations?.length > 0 ||
         analysis.boxes_out_of_bounds?.length > 0 ||
         analysis.invalid_class_ids?.length > 0) && (
-        <Card className="bg-card border-border">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-destructive">
-              <FiAlertTriangle />
-              Issues Detected
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {analysis.corrupt_images?.length > 0 && (
-                <div>
-                  <p className="text-sm font-medium mb-2">
-                    Corrupt Images ({analysis.corrupt_images.length})
-                  </p>
-                  <div className="text-xs text-muted-foreground space-y-1 max-h-32 overflow-y-auto">
-                    {analysis.corrupt_images.slice(0, 10).map((img, idx) => (
-                      <div key={idx}>{img}</div>
-                    ))}
-                    {analysis.corrupt_images.length > 10 && (
-                      <div>... and {analysis.corrupt_images.length - 10} more</div>
-                    )}
+          <Card className="bg-card border-border">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-destructive">
+                <AlertTriangle />
+                Issues Detected
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {analysis.corrupt_images?.length > 0 && (
+                  <div>
+                    <p className="text-sm font-medium mb-2">
+                      Corrupt Images ({analysis.corrupt_images.length})
+                    </p>
+                    <div className="text-xs text-muted-foreground space-y-1 max-h-32 overflow-y-auto">
+                      {analysis.corrupt_images.slice(0, 10).map((img, idx) => (
+                        <div key={idx}>{img}</div>
+                      ))}
+                      {analysis.corrupt_images.length > 10 && (
+                        <div>... and {analysis.corrupt_images.length - 10} more</div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              {analysis.duplicate_images?.length > 0 && (
-                <div>
-                  <p className="text-sm font-medium mb-2">
-                    Duplicate Images ({analysis.duplicate_images.length})
-                  </p>
-                  <div className="text-xs text-muted-foreground space-y-1 max-h-32 overflow-y-auto">
-                    {analysis.duplicate_images.slice(0, 10).map((img, idx) => (
-                      <div key={idx}>{img}</div>
-                    ))}
-                    {analysis.duplicate_images.length > 10 && (
-                      <div>... and {analysis.duplicate_images.length - 10} more</div>
-                    )}
+                {analysis.duplicate_images?.length > 0 && (
+                  <div>
+                    <p className="text-sm font-medium mb-2">
+                      Duplicate Images ({analysis.duplicate_images.length})
+                    </p>
+                    <div className="text-xs text-muted-foreground space-y-1 max-h-32 overflow-y-auto">
+                      {analysis.duplicate_images.slice(0, 10).map((img, idx) => (
+                        <div key={idx}>{img}</div>
+                      ))}
+                      {analysis.duplicate_images.length > 10 && (
+                        <div>... and {analysis.duplicate_images.length - 10} more</div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              {analysis.label_mismatches?.length > 0 && (
-                <div>
-                  <p className="text-sm font-medium mb-2">
-                    Label Mismatches ({analysis.label_mismatches.length})
-                  </p>
-                  <div className="text-xs text-muted-foreground space-y-1 max-h-32 overflow-y-auto">
-                    {analysis.label_mismatches.slice(0, 10).map((img, idx) => (
-                      <div key={idx}>{img}</div>
-                    ))}
-                    {analysis.label_mismatches.length > 10 && (
-                      <div>... and {analysis.label_mismatches.length - 10} more</div>
-                    )}
+                {analysis.label_mismatches?.length > 0 && (
+                  <div>
+                    <p className="text-sm font-medium mb-2">
+                      Label Mismatches ({analysis.label_mismatches.length})
+                    </p>
+                    <div className="text-xs text-muted-foreground space-y-1 max-h-32 overflow-y-auto">
+                      {analysis.label_mismatches.slice(0, 10).map((img, idx) => (
+                        <div key={idx}>{img}</div>
+                      ))}
+                      {analysis.label_mismatches.length > 10 && (
+                        <div>... and {analysis.label_mismatches.length - 10} more</div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              {analysis.invalid_boxes?.length > 0 && (
-                <div>
-                  <p className="text-sm font-medium mb-2">
-                    Invalid Boxes ({analysis.invalid_boxes.length})
-                  </p>
-                  <div className="text-xs text-muted-foreground">
-                    Boxes with zero or negative dimensions detected
+                {analysis.invalid_boxes?.length > 0 && (
+                  <div>
+                    <p className="text-sm font-medium mb-2">
+                      Invalid Boxes ({analysis.invalid_boxes.length})
+                    </p>
+                    <div className="text-xs text-muted-foreground">
+                      Boxes with zero or negative dimensions detected
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              {analysis.empty_annotations?.length > 0 && (
-                <div>
-                  <p className="text-sm font-medium mb-2">
-                    Empty Annotations ({analysis.empty_annotations.length})
-                  </p>
-                  <div className="text-xs text-muted-foreground space-y-1 max-h-32 overflow-y-auto">
-                    {analysis.empty_annotations.slice(0, 10).map((img, idx) => (
-                      <div key={idx}>{img}</div>
-                    ))}
-                    {analysis.empty_annotations.length > 10 && (
-                      <div>... and {analysis.empty_annotations.length - 10} more</div>
-                    )}
+                {analysis.empty_annotations?.length > 0 && (
+                  <div>
+                    <p className="text-sm font-medium mb-2">
+                      Empty Annotations ({analysis.empty_annotations.length})
+                    </p>
+                    <div className="text-xs text-muted-foreground space-y-1 max-h-32 overflow-y-auto">
+                      {analysis.empty_annotations.slice(0, 10).map((img, idx) => (
+                        <div key={idx}>{img}</div>
+                      ))}
+                      {analysis.empty_annotations.length > 10 && (
+                        <div>... and {analysis.empty_annotations.length - 10} more</div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              {analysis.boxes_out_of_bounds?.length > 0 && (
-                <div>
-                  <p className="text-sm font-medium mb-2 text-red-500">
-                    Out of Bounds Boxes ({analysis.boxes_out_of_bounds.length})
-                  </p>
-                  <div className="text-xs text-muted-foreground space-y-1 max-h-32 overflow-y-auto">
-                    {analysis.boxes_out_of_bounds.slice(0, 5).map((issue, idx) => (
-                      <div key={idx} className="text-red-400">{issue}</div>
-                    ))}
-                    {analysis.boxes_out_of_bounds.length > 5 && (
-                      <div>... and {analysis.boxes_out_of_bounds.length - 5} more</div>
-                    )}
+                {analysis.boxes_out_of_bounds?.length > 0 && (
+                  <div>
+                    <p className="text-sm font-medium mb-2 text-red-500">
+                      Out of Bounds Boxes ({analysis.boxes_out_of_bounds.length})
+                    </p>
+                    <div className="text-xs text-muted-foreground space-y-1 max-h-32 overflow-y-auto">
+                      {analysis.boxes_out_of_bounds.slice(0, 5).map((issue, idx) => (
+                        <div key={idx} className="text-red-400">{issue}</div>
+                      ))}
+                      {analysis.boxes_out_of_bounds.length > 5 && (
+                        <div>... and {analysis.boxes_out_of_bounds.length - 5} more</div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              {analysis.invalid_class_ids?.length > 0 && (
-                <div>
-                  <p className="text-sm font-medium mb-2">
-                    Invalid Class IDs ({analysis.invalid_class_ids.length})
-                  </p>
-                  <div className="text-xs text-muted-foreground space-y-1 max-h-32 overflow-y-auto">
-                    {analysis.invalid_class_ids.slice(0, 5).map((issue, idx) => (
-                      <div key={idx}>{issue}</div>
-                    ))}
-                    {analysis.invalid_class_ids.length > 5 && (
-                      <div>... and {analysis.invalid_class_ids.length - 5} more</div>
-                    )}
+                {analysis.invalid_class_ids?.length > 0 && (
+                  <div>
+                    <p className="text-sm font-medium mb-2">
+                      Invalid Class IDs ({analysis.invalid_class_ids.length})
+                    </p>
+                    <div className="text-xs text-muted-foreground space-y-1 max-h-32 overflow-y-auto">
+                      {analysis.invalid_class_ids.slice(0, 5).map((issue, idx) => (
+                        <div key={idx}>{issue}</div>
+                      ))}
+                      {analysis.invalid_class_ids.length > 5 && (
+                        <div>... and {analysis.invalid_class_ids.length - 5} more</div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
       {/* Split Analysis */}
       {analysis.split_distribution && (
@@ -533,7 +533,7 @@ export default function DatasetAnalysisTab({ datasetId }) {
             </div>
             {analysis.data_leakage_detected && (
               <div className="mt-4 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded text-sm text-yellow-500">
-                <FiAlertTriangle className="inline mr-2" />
+                <AlertTriangle className="inline mr-2" />
                 Data leakage detected - same images appear in multiple splits
               </div>
             )}

@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { FiPlay, FiCpu, FiClock } from "react-icons/fi";
+import { Play, Cpu, Clock } from "lucide-react";
 import { API_ENDPOINTS } from "@/lib/config";
 import { toast } from 'sonner';
 
@@ -130,13 +130,13 @@ export default function ProjectTrain({ dataset }) {
                             <div className="space-y-3 text-sm">
                                 <div className="flex justify-between">
                                     <span className="text-muted-foreground flex items-center gap-2">
-                                        <FiCpu /> GPU
+                                        <Cpu /> GPU
                                     </span>
                                     <span>T4 (Free)</span>
                                 </div>
                                 <div className="flex justify-between">
                                     <span className="text-muted-foreground flex items-center gap-2">
-                                        <FiClock /> Time
+                                        <Clock /> Time
                                     </span>
                                     <span>~{(config.epochs * 0.5).toFixed(1)} mins</span>
                                 </div>
@@ -144,7 +144,7 @@ export default function ProjectTrain({ dataset }) {
 
                             <Button className="w-full mt-6" onClick={startTraining} disabled={training}>
                                 {training ? "Starting..." : "Start Training"}
-                                {!training && <FiPlay className="ml-2" />}
+                                {!training && <Play className="ml-2" />}
                             </Button>
                         </CardContent>
                     </Card>

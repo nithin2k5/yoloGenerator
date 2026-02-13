@@ -10,9 +10,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { cn } from "@/lib/utils";
 import { toast } from 'sonner';
 import {
-  FiUpload, FiPlay, FiSquare, FiRefreshCw, FiTerminal,
-  FiCheckCircle, FiXCircle, FiClock, FiCpu, FiTrendingUp
-} from "react-icons/fi";
+  Upload, Play, Square, RefreshCw, Terminal,
+  CheckCircle, XCircle, Clock, Cpu, TrendingUp
+} from "lucide-react";
 
 export default function TrainingTab() {
   const [config, setConfig] = useState({
@@ -98,11 +98,11 @@ export default function TrainingTab() {
   const getStatusBadge = (status) => {
     switch (status) {
       case "running":
-        return <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30"><FiClock className="mr-1" /> Running</Badge>;
+        return <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30"><Clock className="mr-1" /> Running</Badge>;
       case "completed":
-        return <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30"><FiCheckCircle className="mr-1" /> Done</Badge>;
+        return <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30"><CheckCircle className="mr-1" /> Done</Badge>;
       case "failed":
-        return <Badge className="bg-red-500/20 text-red-400 border-red-500/30"><FiXCircle className="mr-1" /> Failed</Badge>;
+        return <Badge className="bg-red-500/20 text-red-400 border-red-500/30"><XCircle className="mr-1" /> Failed</Badge>;
       default:
         return <Badge variant="outline">{status}</Badge>;
     }
@@ -121,7 +121,7 @@ export default function TrainingTab() {
           size="sm"
           className="border-white/10 bg-white/5 hover:bg-white/10"
         >
-          <FiRefreshCw className="mr-2" /> Refresh
+          <RefreshCw className="mr-2" /> Refresh
         </Button>
       </div>
 
@@ -140,7 +140,7 @@ export default function TrainingTab() {
                   onClick={() => document.getElementById('yaml-upload')?.click()}
                   className="border-2 border-dashed border-white/10 rounded-xl p-4 text-center cursor-pointer hover:border-white/20 hover:bg-white/[0.02] transition-all"
                 >
-                  <FiUpload className="mx-auto text-xl text-gray-500 mb-2" />
+                  <Upload className="mx-auto text-xl text-gray-500 mb-2" />
                   <p className="text-sm text-gray-400">{config.dataset_yaml_name || "Click to upload .yaml"}</p>
                   <input
                     id="yaml-upload"
@@ -211,7 +211,7 @@ export default function TrainingTab() {
                 disabled={isTraining || !config.dataset_yaml}
                 className="w-full bg-indigo-600 hover:bg-indigo-500 text-white"
               >
-                {isTraining ? <FiRefreshCw className="animate-spin mr-2" /> : <FiPlay className="mr-2" />}
+                {isTraining ? <RefreshCw className="animate-spin mr-2" /> : <Play className="mr-2" />}
                 {isTraining ? "Starting..." : "Start Training"}
               </Button>
             </CardContent>
@@ -221,13 +221,13 @@ export default function TrainingTab() {
         {/* Jobs Panel */}
         <div className="lg:col-span-2 space-y-4">
           <h3 className="font-bold text-lg flex items-center gap-2">
-            <FiTerminal className="text-gray-500" />
+            <Terminal className="text-gray-500" />
             Training Jobs
           </h3>
 
           {jobs.length === 0 ? (
             <div className="py-16 text-center rounded-2xl border border-dashed border-white/10 bg-white/[0.02]">
-              <FiCpu className="mx-auto text-3xl text-gray-600 mb-3" />
+              <Cpu className="mx-auto text-3xl text-gray-600 mb-3" />
               <h3 className="font-semibold mb-1">No Training Jobs</h3>
               <p className="text-sm text-muted-foreground">Start a training job using the configuration panel.</p>
             </div>
@@ -253,7 +253,7 @@ export default function TrainingTab() {
                         size="sm"
                         className="text-red-400 hover:bg-red-400/10"
                       >
-                        <FiSquare className="mr-1" /> Stop
+                        <Square className="mr-1" /> Stop
                       </Button>
                     )}
                   </div>

@@ -6,14 +6,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-  FiCheckCircle,
-  FiUpload as UploadIcon,
-  FiEdit,
-  FiDownload,
-  FiPlay,
-  FiBox,
-  FiLayers
-} from "react-icons/fi";
+  CheckCircle,
+  Upload as UploadIcon,
+  Edit,
+  Download,
+  Play,
+  Box,
+  Layers
+} from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -80,7 +80,7 @@ export default function DatasetWorkflow({ dataset, onRefresh }) {
       id: "create",
       title: "Initialize",
       description: "Dataset setup",
-      icon: FiLayers,
+      icon: Layers,
     },
     {
       number: 2,
@@ -94,21 +94,21 @@ export default function DatasetWorkflow({ dataset, onRefresh }) {
       id: "annotate",
       title: "Annotate",
       description: "Label objects",
-      icon: FiEdit,
+      icon: Edit,
     },
     {
       number: 4,
       id: "export",
       title: "Export",
       description: "Prepare data",
-      icon: FiDownload,
+      icon: Download,
     },
     {
       number: 5,
       id: "train",
       title: "Train",
       description: "Start Model",
-      icon: FiPlay,
+      icon: Play,
     }
   ];
 
@@ -245,7 +245,7 @@ export default function DatasetWorkflow({ dataset, onRefresh }) {
 
           {dataset?.images?.length > 0 && (
             <div className="mt-4 flex items-center gap-2 text-sm text-green-600 bg-green-50 px-3 py-2 rounded-md border border-green-100">
-              <FiCheckCircle />
+              <CheckCircle />
               <span>{dataset.images.length} images uploaded successfully</span>
             </div>
           )}
@@ -286,7 +286,7 @@ export default function DatasetWorkflow({ dataset, onRefresh }) {
               onClick={() => router.push(`/annotate?dataset=${dataset.id}`)}
               className="w-full sm:w-auto min-w-[200px] shadow-lg shadow-primary/20 transition-all hover:scale-105"
             >
-              <FiEdit className="mr-2" />
+              <Edit className="mr-2" />
               {status === "complete" ? "Review Annotations" : "Start Annotating"}
             </Button>
           </div>
@@ -313,7 +313,7 @@ export default function DatasetWorkflow({ dataset, onRefresh }) {
               } catch (e) { alert("Export failed"); }
             }}
           >
-            <FiDownload className="text-3xl mb-1 text-muted-foreground" />
+            <Download className="text-3xl mb-1 text-muted-foreground" />
             <span className="font-semibold">Export Only</span>
             <span className="text-xs font-normal text-muted-foreground">Get YOLO format zip</span>
           </Button>
@@ -324,7 +324,7 @@ export default function DatasetWorkflow({ dataset, onRefresh }) {
                 size="lg"
                 className="h-auto py-6 px-8 flex flex-col gap-2 bg-gradient-to-br from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white shadow-xl shadow-green-500/20 border-0"
               >
-                <FiPlay className="text-3xl mb-1 text-white/90" />
+                <Play className="text-3xl mb-1 text-white/90" />
                 <span className="font-semibold text-lg">Export & Train</span>
                 <span className="text-xs font-normal text-white/80">Start model training immediately</span>
               </Button>
@@ -449,7 +449,7 @@ export default function DatasetWorkflow({ dataset, onRefresh }) {
                           "bg-muted border-transparent text-muted-foreground"
                     )}
                   >
-                    {isComplete ? <FiCheckCircle className="text-xl" /> : <step.icon className="text-lg" />}
+                    {isComplete ? <CheckCircle className="text-xl" /> : <step.icon className="text-lg" />}
                   </div>
                   <div className="flex-1 md:flex-none">
                     <p className={cn("text-sm font-semibold transition-colors", isCurrent ? "text-foreground" : "text-muted-foreground")}>
@@ -489,7 +489,7 @@ export default function DatasetWorkflow({ dataset, onRefresh }) {
           {/* Empty State / Completion State Fallback can go here if needed */}
           {getStepStatus(2) === "pending" && (
             <div className="text-center py-12 text-muted-foreground">
-              <FiBox className="text-4xl mx-auto mb-4 opacity-20" />
+              <Box className="text-4xl mx-auto mb-4 opacity-20" />
               <p>Complete the previous steps to unlock this stage.</p>
             </div>
           )}

@@ -6,9 +6,9 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { toast } from 'sonner';
 import {
-  FiDatabase, FiDownload, FiTrash2, FiRefreshCw,
-  FiBox, FiClock, FiHardDrive, FiActivity
-} from "react-icons/fi";
+  Database, Download, Trash2, RefreshCw,
+  Box, Clock, HardDrive, Activity
+} from "lucide-react";
 
 export default function ModelsTab() {
   const [models, setModels] = useState([]);
@@ -85,7 +85,7 @@ export default function ModelsTab() {
           variant="outline"
           className="border-white/10 bg-white/5 hover:bg-white/10 text-white"
         >
-          <FiRefreshCw className={`mr-2 ${isLoading ? "animate-spin" : ""}`} />
+          <RefreshCw className={`mr-2 ${isLoading ? "animate-spin" : ""}`} />
           Refresh
         </Button>
       </div>
@@ -106,7 +106,7 @@ export default function ModelsTab() {
               <div className="p-6 flex-1">
                 <div className="flex items-start justify-between mb-6">
                   <div className="w-12 h-12 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-400 group-hover:bg-indigo-500/20 group-hover:scale-110 transition-all duration-300">
-                    <FiBox className="text-2xl" />
+                    <Box className="text-2xl" />
                   </div>
                   <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20">
                     Ready
@@ -119,14 +119,14 @@ export default function ModelsTab() {
                 <div className="space-y-3 text-sm text-gray-400">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <FiHardDrive className="text-gray-500" />
+                      <HardDrive className="text-gray-500" />
                       <span>Size</span>
                     </div>
                     <span className="text-gray-200 font-medium">{formatFileSize(model.size)}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <FiClock className="text-gray-500" />
+                      <Clock className="text-gray-500" />
                       <span>Created</span>
                     </div>
                     <span className="text-gray-200">{new Date(model.created * 1000).toLocaleDateString()}</span>
@@ -134,7 +134,7 @@ export default function ModelsTab() {
                   {model.metrics && (
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <FiActivity className="text-gray-500" />
+                        <Activity className="text-gray-500" />
                         <span>mAP@50</span>
                       </div>
                       <span className="text-emerald-400 font-mono">{Number(model.metrics?.mAP50 || 0).toFixed(3)}</span>
@@ -149,7 +149,7 @@ export default function ModelsTab() {
                   className="flex-1 bg-white text-black hover:bg-gray-200"
                   size="sm"
                 >
-                  <FiDownload className="mr-2" /> Download
+                  <Download className="mr-2" /> Download
                 </Button>
                 <Button
                   onClick={() => handleDelete(model.name)}
@@ -157,7 +157,7 @@ export default function ModelsTab() {
                   size="icon"
                   className="text-gray-400 hover:text-red-400 hover:bg-red-400/10 h-8 w-8"
                 >
-                  <FiTrash2 className="w-3.5 h-3.5" />
+                  <Trash2 className="w-3.5 h-3.5" />
                 </Button>
               </div>
             </div>
@@ -166,7 +166,7 @@ export default function ModelsTab() {
       ) : (
         <div className="py-20 text-center rounded-2xl border border-dashed border-white/10 bg-white/[0.02]">
           <div className="w-16 h-16 rounded-full bg-indigo-500/10 flex items-center justify-center mx-auto mb-4 text-indigo-400">
-            <FiDatabase className="text-3xl" />
+            <Database className="text-3xl" />
           </div>
           <h3 className="text-xl font-bold mb-2">Registry Empty</h3>
           <p className="text-muted-foreground">Train your first model to see artifacts here.</p>

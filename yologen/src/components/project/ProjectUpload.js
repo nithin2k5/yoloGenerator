@@ -3,7 +3,7 @@
 import { useState, useCallback } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FiUpload, FiFile } from "react-icons/fi";
+import { Upload } from "lucide-react";
 import { API_ENDPOINTS } from "@/lib/config";
 import { toast } from 'sonner';
 
@@ -79,12 +79,12 @@ export default function ProjectUpload({ dataset, onUploadComplete }) {
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
                 className={`flex-1 border-2 border-dashed rounded-xl flex flex-col items-center justify-center p-12 transition-all ${isDragging
-                        ? "border-primary bg-primary/5 scale-[0.99]"
-                        : "border-border hover:border-primary/50 hover:bg-muted/30"
+                    ? "border-primary bg-primary/5 scale-[0.99]"
+                    : "border-border hover:border-primary/50 hover:bg-muted/30"
                     }`}
             >
                 <div className="w-20 h-20 bg-muted rounded-full flex items-center justify-center mb-6">
-                    <FiUpload className={`text-3xl ${isDragging ? "text-primary" : "text-muted-foreground"}`} />
+                    <Upload className={`text-3xl ${isDragging ? "text-primary" : "text-muted-foreground"}`} />
                 </div>
                 <h3 className="text-lg font-medium mb-2">
                     {uploading ? "Uploading..." : "Drag and drop images here"}

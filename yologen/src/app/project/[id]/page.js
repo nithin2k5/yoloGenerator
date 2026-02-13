@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { API_ENDPOINTS } from "@/lib/config";
-import { FiArrowLeft, FiUpload, FiImage, FiCpu, FiLayers, FiCode, FiGrid, FiSettings } from "react-icons/fi";
+import { ArrowLeft, Upload, Image, Cpu, Layers, Code, Grid } from "lucide-react";
 import { toast } from 'sonner';
 
 // Components for each tab
@@ -99,7 +99,7 @@ export default function ProjectPage() {
             <header className="h-16 border-b border-border bg-background/50 backdrop-blur-sm flex items-center justify-between px-6 shrink-0">
                 <div className="flex items-center gap-4">
                     <Button variant="ghost" size="icon" onClick={() => router.push("/dashboard")}>
-                        <FiArrowLeft />
+                        <ArrowLeft />
                     </Button>
                     <div>
                         <h1 className="font-bold text-lg flex items-center gap-2">
@@ -119,12 +119,12 @@ export default function ProjectPage() {
             <Tabs value={activeTab} onValueChange={handleTabChange} className="flex-1 flex flex-col min-h-0">
                 <div className="border-b border-border bg-muted/5 px-6">
                     <TabsList className="h-12 bg-transparent p-0 gap-6">
-                        <TabTrigger value="overview" icon={FiGrid}>Overview</TabTrigger>
-                        <TabTrigger value="upload" icon={FiUpload}>Upload</TabTrigger>
-                        <TabTrigger value="annotate" icon={FiImage}>Annotate</TabTrigger>
-                        <TabTrigger value="generate" icon={FiLayers}>Generate</TabTrigger>
-                        <TabTrigger value="train" icon={FiCpu}>Train</TabTrigger>
-                        <TabTrigger value="deploy" icon={FiCode}>Deploy</TabTrigger>
+                        <TabTrigger value="overview" icon={Grid}>Overview</TabTrigger>
+                        <TabTrigger value="upload" icon={Upload}>Upload</TabTrigger>
+                        <TabTrigger value="annotate" icon={Image}>Annotate</TabTrigger>
+                        <TabTrigger value="generate" icon={Layers}>Generate</TabTrigger>
+                        <TabTrigger value="train" icon={Cpu}>Train</TabTrigger>
+                        <TabTrigger value="deploy" icon={Code}>Deploy</TabTrigger>
                     </TabsList>
                 </div>
 

@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { FiZap, FiUser, FiLock, FiAlertCircle, FiLogIn } from "react-icons/fi";
+import { Zap, User, Lock, AlertCircle, LogIn } from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -41,7 +41,7 @@ export default function LoginPage() {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <FiZap className="text-4xl text-primary mx-auto mb-4" />
+          <Zap className="text-4xl text-primary mx-auto mb-4" />
           <h1 className="text-2xl font-bold">Welcome Back</h1>
           <p className="text-muted-foreground text-sm">Sign in to your account</p>
         </div>
@@ -58,7 +58,7 @@ export default function LoginPage() {
             <form onSubmit={handleSubmit} className="space-y-4">
               {error && (
                 <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/30 flex items-center gap-2 text-destructive text-sm">
-                  <FiAlertCircle className="flex-shrink-0" />
+                  <LogIn className="flex-shrink-0" />
                   <p>{error}</p>
                 </div>
               )}

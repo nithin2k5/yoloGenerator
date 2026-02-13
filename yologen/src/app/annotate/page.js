@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback, Suspense } from "react";
+import { useState, useEffect, useRef, useCallback, Suspense, useMemo } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,10 +10,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import AutoLabelModal from "@/components/project/AutoLabelModal";
 import {
-  FiSave, FiTrash2, FiUpload, FiChevronLeft, FiChevronRight, FiHome,
-  FiDownload, FiZoomIn, FiZoomOut, FiRotateCcw, FiMaximize, FiCheck, FiCopy, FiClipboard
-} from "react-icons/fi";
-import { Sparkles } from "lucide-react";
+  Save, Trash2, Upload, ChevronLeft, ChevronRight, Home,
+  Download, ZoomIn, ZoomOut, RotateCcw, Maximize, Check, Copy, Clipboard, Sparkles
+} from "lucide-react";
 
 function AnnotationToolContent() {
   const searchParams = useSearchParams();
@@ -37,6 +36,23 @@ function AnnotationToolContent() {
   const [toastMessage, setToastMessage] = useState(null);
   const [showAutoLabel, setShowAutoLabel] = useState(false);
   const [copiedBoxes, setCopiedBoxes] = useState(null);
+  const [filterStatus, setFilterStatus] = useState('all'); // 'all', 'unlabeled', 'predicted', 'annotated', 'reviewed'
+
+  // Filter images based on status
+  const filteredImages = useMemo(() => {
+    return images.map((img, idx) => ({ ...img, originalIndex: idx }))
+      .filter(img => {
+        if (filterStatus === 'all') return true;
+        const status = img.status || 'unlabeled';
+        return status === filterStatus;
+      });
+  }, [images, filterStatus]);
+
+  const getFilteredIndex = useCallback((originalIndex) => {
+    return filteredImages.findIndex(img => img.originalIndex === originalIndex);
+  }, [filteredImages]);
+
+  const currentFilteredIndex = getFilteredIndex(currentImageIndex);
 
   const canvasRef = useRef(null);
   const imageRef = useRef(null);
@@ -169,7 +185,7 @@ function AnnotationToolContent() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [boxes, boxHistory, dataset, images, currentImageIndex]);
+  }, [boxes, boxHistory, dataset, images, currentImageIndex, copiedBoxes]);
 
   const fetchDataset = async () => {
     if (!datasetId) return;
@@ -455,6 +471,10 @@ function AnnotationToolContent() {
       if (response.ok) {
         setSaveStatus('saved');
         setReviewStatus(newStatus);
+        // Update the status of the current image in the images array
+        setImages(prevImages => prevImages.map((image, idx) =>
+          idx === currentImageIndex ? { ...image, status: newStatus } : image
+        ));
         setTimeout(() => setSaveStatus(null), 2000);
         await fetchStats();
         return true;
@@ -472,10 +492,21 @@ function AnnotationToolContent() {
 
   const handleNavigation = async (direction) => {
     await handleSaveAnnotations();
+
+    let nextInternalIndex = -1;
+
     if (direction === 'next') {
-      setCurrentImageIndex(prev => Math.min(images.length - 1, prev + 1));
+      if (currentFilteredIndex < filteredImages.length - 1) {
+        nextInternalIndex = filteredImages[currentFilteredIndex + 1].originalIndex;
+      }
     } else {
-      setCurrentImageIndex(prev => Math.max(0, prev - 1));
+      if (currentFilteredIndex > 0) {
+        nextInternalIndex = filteredImages[currentFilteredIndex - 1].originalIndex;
+      }
+    }
+
+    if (nextInternalIndex !== -1) {
+      setCurrentImageIndex(nextInternalIndex);
     }
   };
 
@@ -487,6 +518,14 @@ function AnnotationToolContent() {
   const handleZoom = (delta) => {
     setZoom(prev => Math.max(0.5, Math.min(3, prev + delta)));
   };
+
+  // Calculate counts for filters
+  const counts = images.reduce((acc, img) => {
+    const status = img.status || 'unlabeled';
+    acc[status] = (acc[status] || 0) + 1;
+    acc.all = (acc.all || 0) + 1;
+    return acc;
+  }, { all: 0, unlabeled: 0, predicted: 0, annotated: 0, reviewed: 0 });
 
   if (!dataset) {
     return (
@@ -505,7 +544,7 @@ function AnnotationToolContent() {
         <div className="text-center">
           <p className="text-muted-foreground mb-4">Error: Dataset has no classes defined</p>
           <Button onClick={() => router.push('/dashboard')} className="bg-primary hover:bg-primary/90">
-            <FiHome className="mr-2" /> Return to Dashboard
+            <Home className="mr-2" /> Return to Dashboard
           </Button>
         </div>
       </div>
@@ -540,14 +579,17 @@ function AnnotationToolContent() {
                 size="sm"
                 className="text-gray-400 hover:text-white"
               >
-                <FiChevronLeft className="mr-1" />
+                <ChevronLeft className="mr-1" />
                 Back
               </Button>
               <div className="h-6 w-px bg-white/10" />
               <div>
                 <h1 className="text-sm font-semibold">{dataset?.name || 'Loading...'}</h1>
-                <p className="text-[11px] text-muted-foreground">
-                  {currentImageIndex + 1} / {images.length}
+                <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+                  <span className={filterStatus !== 'all' ? 'text-indigo-400 font-medium' : ''}>
+                    {currentFilteredIndex + 1} / {filteredImages.length}
+                  </span>
+                  {filterStatus !== 'all' && <span className="text-gray-600 text-[10px] uppercase">({filterStatus})</span>}
                   {selectedSplit && <span className="ml-1">• <span className="capitalize">{selectedSplit}</span></span>}
                 </p>
               </div>
@@ -579,41 +621,86 @@ function AnnotationToolContent() {
 
       {/* Main Content */}
       <main className="flex-1 min-h-0 overflow-hidden">
-        <div className="grid grid-cols-[200px_1fr_220px] h-full">
+        <div className="grid grid-cols-[220px_1fr_220px] h-full">
 
-          {/* Left Sidebar - Classes */}
-          <div className="border-r border-white/5 bg-zinc-950/60 p-3 overflow-y-auto custom-scrollbar space-y-4">
-            <div>
-              <h3 className="font-medium text-xs text-gray-500 uppercase tracking-wider mb-2 px-1">Classes</h3>
-              {dataset?.classes?.map((cls, idx) => {
-                const color = getClassColor(idx);
-                return (
-                  <button
-                    key={idx}
-                    onClick={() => setSelectedClass(idx)}
-                    className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all flex items-center justify-between gap-2 mb-1 ${selectedClass === idx
-                      ? 'bg-white/10 text-white'
-                      : 'hover:bg-white/5 text-gray-400 hover:text-gray-200'
-                      }`}
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <div className="w-3 h-3 rounded-sm flex-shrink-0" style={{ backgroundColor: color.stroke }} />
-                      <span className="truncate">{cls}</span>
+          {/* Left Sidebar - Filters & Classes */}
+          <div className="border-r border-white/5 bg-zinc-950/60 flex flex-col h-full">
+
+            {/* Filter Section */}
+            <div className="p-3 border-b border-white/5">
+              <h3 className="font-medium text-xs text-gray-500 uppercase tracking-wider mb-2 px-1">Filter Images</h3>
+              <Select value={filterStatus} onValueChange={setFilterStatus}>
+                <SelectTrigger className="w-full h-8 text-xs bg-white/5 border-white/10">
+                  <SelectValue placeholder="Filter status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">
+                    <div className="flex items-center justify-between w-full min-w-[140px]">
+                      <span>All Images</span>
+                      <span className="text-xs text-muted-foreground ml-2">{counts.all}</span>
                     </div>
-                    <span className="text-[10px] text-gray-600 flex-shrink-0">{idx + 1}</span>
-                  </button>
-                );
-              })}
+                  </SelectItem>
+                  <SelectItem value="unlabeled">
+                    <div className="flex items-center justify-between w-full min-w-[140px]">
+                      <span className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-gray-500" /> Unlabeled</span>
+                      <span className="text-xs text-muted-foreground ml-2">{counts.unlabeled}</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="predicted">
+                    <div className="flex items-center justify-between w-full min-w-[140px]">
+                      <span className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-purple-500" /> Predicted</span>
+                      <span className="text-xs text-muted-foreground ml-2">{counts.predicted}</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="annotated">
+                    <div className="flex items-center justify-between w-full min-w-[140px]">
+                      <span className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-indigo-500" /> Annotated</span>
+                      <span className="text-xs text-muted-foreground ml-2">{counts.annotated}</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="reviewed">
+                    <div className="flex items-center justify-between w-full min-w-[140px]">
+                      <span className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Reviewed</span>
+                      <span className="text-xs text-muted-foreground ml-2">{counts.reviewed}</span>
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
-            <div className="pt-3 border-t border-white/5">
-              <h3 className="font-medium text-xs text-gray-500 uppercase tracking-wider mb-2 px-1">Shortcuts</h3>
-              <div className="text-[11px] text-gray-500 space-y-1.5 px-1">
-                <div className="flex justify-between"><span>Navigate</span><kbd className="bg-white/5 px-1.5 py-0.5 rounded text-gray-400">← →</kbd></div>
-                <div className="flex justify-between"><span>Save</span><kbd className="bg-white/5 px-1.5 py-0.5 rounded text-gray-400">S</kbd></div>
-                <div className="flex justify-between"><span>Delete last</span><kbd className="bg-white/5 px-1.5 py-0.5 rounded text-gray-400">Del</kbd></div>
-                <div className="flex justify-between"><span>Undo</span><kbd className="bg-white/5 px-1.5 py-0.5 rounded text-gray-400">⌘Z</kbd></div>
-                <div className="flex justify-between"><span>Class</span><kbd className="bg-white/5 px-1.5 py-0.5 rounded text-gray-400">1-9</kbd></div>
+            <div className="p-3 overflow-y-auto custom-scrollbar flex-1 space-y-4">
+              <div>
+                <h3 className="font-medium text-xs text-gray-500 uppercase tracking-wider mb-2 px-1">Classes</h3>
+                {dataset?.classes?.map((cls, idx) => {
+                  const color = getClassColor(idx);
+                  return (
+                    <button
+                      key={idx}
+                      onClick={() => setSelectedClass(idx)}
+                      className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all flex items-center justify-between gap-2 mb-1 ${selectedClass === idx
+                        ? 'bg-white/10 text-white'
+                        : 'hover:bg-white/5 text-gray-400 hover:text-gray-200'
+                        }`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="w-3 h-3 rounded-sm flex-shrink-0" style={{ backgroundColor: color.stroke }} />
+                        <span className="truncate">{cls}</span>
+                      </div>
+                      <span className="text-[10px] text-gray-600 flex-shrink-0">{idx + 1}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="pt-3 border-t border-white/5">
+                <h3 className="font-medium text-xs text-gray-500 uppercase tracking-wider mb-2 px-1">Shortcuts</h3>
+                <div className="text-[11px] text-gray-500 space-y-1.5 px-1">
+                  <div className="flex justify-between"><span>Navigate</span><kbd className="bg-white/5 px-1.5 py-0.5 rounded text-gray-400">← →</kbd></div>
+                  <div className="flex justify-between"><span>Save</span><kbd className="bg-white/5 px-1.5 py-0.5 rounded text-gray-400">S</kbd></div>
+                  <div className="flex justify-between"><span>Delete last</span><kbd className="bg-white/5 px-1.5 py-0.5 rounded text-gray-400">Del</kbd></div>
+                  <div className="flex justify-between"><span>Undo</span><kbd className="bg-white/5 px-1.5 py-0.5 rounded text-gray-400">⌘Z</kbd></div>
+                  <div className="flex justify-between"><span>Class</span><kbd className="bg-white/5 px-1.5 py-0.5 rounded text-gray-400">1-9</kbd></div>
+                </div>
               </div>
             </div>
           </div>
@@ -662,7 +749,9 @@ function AnnotationToolContent() {
                 </div>
               ) : (
                 <div className="text-center">
-                  <p className="text-muted-foreground mb-4">No images available</p>
+                  <p className="text-muted-foreground mb-4">
+                    {filterStatus !== 'all' ? `No ${filterStatus} images found` : "No images available"}
+                  </p>
                   <Button onClick={() => fileInputRef.current?.click()}>Upload Images</Button>
                   <Input ref={fileInputRef} type="file" multiple accept="image/*" onChange={handleUploadImages} className="hidden" />
                 </div>
@@ -672,29 +761,29 @@ function AnnotationToolContent() {
             {/* Zoom Controls */}
             <div className="absolute bottom-20 right-4 flex flex-col gap-1 z-20">
               <Button variant="ghost" size="icon" onClick={() => handleZoom(0.25)} className="h-8 w-8 bg-black/60 backdrop-blur-sm border border-white/10 text-white hover:bg-white/10">
-                <FiZoomIn className="w-3.5 h-3.5" />
+                <ZoomIn className="w-3.5 h-3.5" />
               </Button>
               <Button variant="ghost" size="icon" onClick={() => handleZoom(-0.25)} className="h-8 w-8 bg-black/60 backdrop-blur-sm border border-white/10 text-white hover:bg-white/10">
-                <FiZoomOut className="w-3.5 h-3.5" />
+                <ZoomOut className="w-3.5 h-3.5" />
               </Button>
               <Button variant="ghost" size="icon" onClick={() => setZoom(1)} className="h-8 w-8 bg-black/60 backdrop-blur-sm border border-white/10 text-white hover:bg-white/10">
-                <FiMaximize className="w-3.5 h-3.5" />
+                <Maximize className="w-3.5 h-3.5" />
               </Button>
             </div>
 
             {/* Bottom Navigation + Thumbnails */}
             {images.length > 0 && (
               <div className="border-t border-white/5 bg-zinc-950/80 backdrop-blur-sm shrink-0">
-                {/* Thumbnail Strip */}
+                {/* Thumbnail Strip (Filtered) */}
                 <div className="h-16 flex items-center gap-1 px-4 overflow-x-auto custom-scrollbar">
-                  {images.map((img, idx) => (
+                  {filteredImages.map((img, idx) => (
                     <button
-                      key={idx}
+                      key={img.id}
                       onClick={async () => {
                         await handleSaveAnnotations();
-                        setCurrentImageIndex(idx);
+                        setCurrentImageIndex(img.originalIndex);
                       }}
-                      className={`flex-shrink-0 w-12 h-12 rounded-lg overflow-hidden border-2 transition-all hover:opacity-100 ${idx === currentImageIndex
+                      className={`flex-shrink-0 w-12 h-12 rounded-lg overflow-hidden border-2 transition-all hover:opacity-100 relative ${img.originalIndex === currentImageIndex
                         ? 'border-indigo-500 opacity-100 scale-105'
                         : 'border-white/5 opacity-50 hover:border-white/20'
                         }`}
@@ -705,18 +794,38 @@ function AnnotationToolContent() {
                         className="w-full h-full object-cover"
                         loading="lazy"
                       />
+                      {/* Status Dot */}
+                      {img.status && img.status !== 'unlabeled' && (
+                        <div className={`absolute bottom-1 right-1 w-2 h-2 rounded-full ring-1 ring-black ${img.status === 'predicted' ? 'bg-purple-500' :
+                          img.status === 'annotated' ? 'bg-indigo-500' :
+                            img.status === 'reviewed' ? 'bg-emerald-500' : 'bg-gray-500'
+                          }`} />
+                      )}
                     </button>
                   ))}
+                  {filteredImages.length === 0 && (
+                    <div className="w-full text-center text-xs text-gray-500 py-4">
+                      No images match filter &quot;{filterStatus}&quot;
+                    </div>
+                  )}
                 </div>
 
                 {/* Navigation */}
                 <div className="h-10 flex items-center justify-between px-4 border-t border-white/5">
-                  <Button onClick={() => handleNavigation('prev')} disabled={currentImageIndex === 0} variant="ghost" size="sm" className="h-7 text-xs text-gray-400">
-                    <FiChevronLeft className="mr-1" /> Prev
+                  <Button
+                    onClick={() => handleNavigation('prev')}
+                    disabled={currentFilteredIndex <= 0}
+                    variant="ghost" size="sm" className="h-7 text-xs text-gray-400"
+                  >
+                    <ChevronLeft className="mr-1" /> Prev
                   </Button>
                   <span className="text-xs text-gray-500 truncate max-w-[200px]">{currentImage?.original_name}</span>
-                  <Button onClick={() => handleNavigation('next')} disabled={currentImageIndex === images.length - 1} variant="ghost" size="sm" className="h-7 text-xs text-gray-400">
-                    Next <FiChevronRight className="ml-1" />
+                  <Button
+                    onClick={() => handleNavigation('next')}
+                    disabled={currentFilteredIndex >= filteredImages.length - 1}
+                    variant="ghost" size="sm" className="h-7 text-xs text-gray-400"
+                  >
+                    Next <ChevronRight className="ml-1" />
                   </Button>
                 </div>
               </div>
@@ -732,7 +841,7 @@ function AnnotationToolContent() {
                 onClick={() => handleSaveAnnotations('reviewed')}
                 className={`w-full h-8 text-xs ${reviewStatus === 'reviewed' ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-white/10 hover:bg-white/20'}`}
               >
-                <FiCheck className="mr-1.5" />
+                <Check className="mr-1.5" />
                 {reviewStatus === 'reviewed' ? 'Reviewed' : 'Mark as Reviewed'}
               </Button>
             </div>
@@ -748,7 +857,7 @@ function AnnotationToolContent() {
                     showToast(`Copied ${boxes.length} boxes`);
                   }}
                 >
-                  <FiCopy className="mr-1.5" /> Copy
+                  <Copy className="mr-1.5" /> Copy
                 </Button>
                 <Button
                   variant="ghost"
@@ -763,7 +872,7 @@ function AnnotationToolContent() {
                     }
                   }}
                 >
-                  <FiClipboard className="mr-1.5" /> Paste
+                  <Clipboard className="mr-1.5" /> Paste
                 </Button>
               </div>
 
@@ -772,7 +881,7 @@ function AnnotationToolContent() {
                 if (success) showToast("Annotations saved!");
                 else showToast("Failed to save", 'error');
               }} className="w-full bg-indigo-600 hover:bg-indigo-500 h-9 text-sm">
-                <FiSave className="mr-2 w-3.5 h-3.5" /> Save
+                <Save className="mr-2 w-3.5 h-3.5" /> Save
               </Button>
               <Button
                 onClick={async () => {
@@ -783,7 +892,7 @@ function AnnotationToolContent() {
                 variant="outline"
                 className="w-full border-white/10 h-9 text-sm"
               >
-                <FiDownload className="mr-2 w-3.5 h-3.5" /> Export
+                <Download className="mr-2 w-3.5 h-3.5" /> Export
               </Button>
               {boxHistory.length > 0 && (
                 <Button
@@ -796,7 +905,7 @@ function AnnotationToolContent() {
                   variant="ghost"
                   className="w-full border border-white/5 h-9 text-sm text-gray-400"
                 >
-                  <FiRotateCcw className="mr-2 w-3.5 h-3.5" /> Undo
+                  <RotateCcw className="mr-2 w-3.5 h-3.5" /> Undo
                 </Button>
               )}
             </div>
@@ -829,7 +938,7 @@ function AnnotationToolContent() {
                           size="icon"
                           className="h-6 w-6 text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
                         >
-                          <FiTrash2 className="w-3 h-3" />
+                          <Trash2 className="w-3 h-3" />
                         </Button>
                       </div>
                     );

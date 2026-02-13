@@ -8,9 +8,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import {
-  FiUpload, FiImage, FiZap, FiCopy, FiBox, FiTrash2,
-  FiLoader, FiClock, FiPlay
-} from "react-icons/fi";
+  Upload, Image, Zap, Copy, Box, Trash2,
+  Loader, Clock, Play
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -206,7 +206,7 @@ export default function InferenceTab() {
                 disabled={!image || running}
                 className="w-full bg-indigo-600 hover:bg-indigo-500 text-white"
               >
-                {running ? <FiLoader className="animate-spin mr-2" /> : <FiPlay className="mr-2" />}
+                {running ? <Loader className="animate-spin mr-2" /> : <Play className="mr-2" />}
                 {running ? "Running..." : "Run Inference"}
               </Button>
             </CardContent>
@@ -227,18 +227,18 @@ export default function InferenceTab() {
                       toast.success("Copied JSON to clipboard");
                     }}
                   >
-                    <FiCopy className="w-3.5 h-3.5" />
+                    <Copy className="w-3.5 h-3.5" />
                   </Button>
                 </div>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-400 flex items-center gap-2"><FiBox /> Objects</span>
+                  <span className="text-gray-400 flex items-center gap-2"><Box /> Objects</span>
                   <span className="font-bold text-white">{results.num_detections || 0}</span>
                 </div>
                 {inferenceTime !== null && (
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-400 flex items-center gap-2"><FiClock /> Latency</span>
+                    <span className="text-gray-400 flex items-center gap-2"><Clock /> Latency</span>
                     <span className="font-mono text-emerald-400">{inferenceTime}ms</span>
                   </div>
                 )}
@@ -292,7 +292,7 @@ export default function InferenceTab() {
                 "w-20 h-20 rounded-2xl flex items-center justify-center mb-6 transition-all",
                 isDragging ? "bg-indigo-500/20 text-indigo-400 scale-110" : "bg-white/5 text-gray-500"
               )}>
-                <FiUpload className="text-3xl" />
+                <Upload className="text-3xl" />
               </div>
               <h3 className="text-lg font-semibold mb-2">{isDragging ? "Drop here" : "Upload an Image"}</h3>
               <p className="text-sm text-gray-500 mb-6">Drag & drop or click to browse. JPG, PNG, WEBP supported.</p>
@@ -336,7 +336,7 @@ export default function InferenceTab() {
                     className="border-white/10"
                     onClick={() => { setImage(null); setImagePreview(null); setResults(null); setInferenceTime(null); }}
                   >
-                    <FiTrash2 className="mr-2" /> Clear
+                    <Trash2 className="mr-2" /> Clear
                   </Button>
                   <Button
                     size="sm"
@@ -344,7 +344,7 @@ export default function InferenceTab() {
                     disabled={running}
                     className="bg-indigo-600 hover:bg-indigo-500"
                   >
-                    {running ? <FiLoader className="animate-spin mr-2" /> : <FiZap className="mr-2" />}
+                    {running ? <Loader className="animate-spin mr-2" /> : <Zap className="mr-2" />}
                     Re-run
                   </Button>
                 </div>

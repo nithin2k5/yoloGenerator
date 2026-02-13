@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { FiExternalLink, FiImage, FiSettings } from "react-icons/fi";
+import { ExternalLink, Image, Settings } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -22,7 +22,7 @@ export default function ProjectAnnotate({ dataset, stats }) {
                     <p className="text-muted-foreground text-sm">Label objects in your images.</p>
                 </div>
                 <Button onClick={() => router.push(`/annotate?dataset=${dataset.id}`)}>
-                    Open Annotation Tool <FiExternalLink className="ml-2" />
+                    Open Annotation Tool <ExternalLink className="ml-2" />
                 </Button>
             </div>
 
@@ -31,7 +31,7 @@ export default function ProjectAnnotate({ dataset, stats }) {
                     <CardContent className="p-6">
                         <div className="flex items-center gap-4 mb-4">
                             <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center text-primary">
-                                <FiImage className="text-2xl" />
+                                <Image className="text-2xl" />
                             </div>
                             <div>
                                 <h3 className="font-semibold">Unannotated Images</h3>
@@ -53,7 +53,7 @@ export default function ProjectAnnotate({ dataset, stats }) {
                     <CardContent className="p-6">
                         <div className="flex items-center gap-4 mb-4">
                             <div className="w-12 h-12 bg-green-500/10 rounded-lg flex items-center justify-center text-green-500">
-                                <FiSettings className="text-2xl" />
+                                <Settings className="text-2xl" />
                             </div>
                             <div>
                                 <h3 className="font-semibold">Classes</h3>

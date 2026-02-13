@@ -12,9 +12,9 @@ import { API_ENDPOINTS } from "@/lib/config";
 import { cn } from "@/lib/utils";
 import { toast } from 'sonner';
 import {
-  FiPlus, FiImage, FiBox, FiTrash2, FiDownload, FiCpu,
-  FiDatabase, FiChevronRight, FiUpload, FiFolder, FiCheck
-} from "react-icons/fi";
+  Plus, Image, Box, Trash2, Download, Cpu,
+  Database, ChevronRight, Upload, Folder, Check
+} from "lucide-react";
 
 export default function DatasetsTab() {
   const [datasets, setDatasets] = useState([]);
@@ -32,7 +32,8 @@ export default function DatasetsTab() {
     try {
       const response = await fetch(API_ENDPOINTS.DATASETS.LIST);
       if (!response.ok) throw new Error("Failed to fetch");
-      const data = await response.json();
+      const rawData = await response.json();
+      const data = Array.isArray(rawData) ? rawData : (rawData.datasets || []);
 
       const datasetsWithStats = await Promise.all(
         data.map(async (ds) => {
@@ -89,6 +90,7 @@ export default function DatasetsTab() {
         setNewDataset({ name: "", description: "", classes: "" });
         setShowCreate(false);
         fetchDatasets();
+        router.push(`/project/${data.dataset_id}`);
       } else {
         const err = await response.json();
         toast.error(err.detail || "Create failed");
@@ -132,7 +134,7 @@ export default function DatasetsTab() {
         <Dialog open={showCreate} onOpenChange={setShowCreate}>
           <DialogTrigger asChild>
             <Button className="bg-indigo-600 hover:bg-indigo-500 text-white">
-              <FiPlus className="mr-2" /> New Dataset
+              <Plus className="mr-2" /> New Dataset
             </Button>
           </DialogTrigger>
           <DialogContent className="bg-zinc-900 border-white/10">
@@ -186,12 +188,12 @@ export default function DatasetsTab() {
       ) : datasets.length === 0 ? (
         <div className="py-20 text-center rounded-2xl border border-dashed border-white/10 bg-white/[0.02]">
           <div className="w-16 h-16 rounded-full bg-indigo-500/10 flex items-center justify-center mx-auto mb-4 text-indigo-400">
-            <FiFolder className="text-3xl" />
+            <Folder className="text-3xl" />
           </div>
           <h3 className="text-xl font-bold mb-2">No Datasets Yet</h3>
           <p className="text-muted-foreground mb-6">Get started by creating your first dataset.</p>
           <Button onClick={() => setShowCreate(true)} className="bg-indigo-600 hover:bg-indigo-500">
-            <FiPlus className="mr-2" /> Create First Dataset
+            <Plus className="mr-2" /> Create First Dataset
           </Button>
         </div>
       ) : (
@@ -210,7 +212,7 @@ export default function DatasetsTab() {
                   {/* Header */}
                   <div className="flex items-start justify-between mb-4">
                     <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-400 group-hover:bg-indigo-500/20 transition-all">
-                      <FiDatabase className="text-lg" />
+                      <Database className="text-lg" />
                     </div>
                     <Badge variant="outline" className="text-[10px] h-5 border-white/10">
                       {dataset.type || "Detection"}
@@ -226,15 +228,15 @@ export default function DatasetsTab() {
                   <div className="space-y-3">
                     <div className="flex items-center gap-4 text-sm">
                       <div className="flex items-center gap-1.5 text-gray-400">
-                        <FiImage className="w-3.5 h-3.5" />
+                        <Image className="w-3.5 h-3.5" />
                         <span>{total} images</span>
                       </div>
                       <div className="flex items-center gap-1.5 text-gray-400">
-                        <FiBox className="w-3.5 h-3.5" />
+                        <Box className="w-3.5 h-3.5" />
                         <span>{dataset.classes?.length || 0} classes</span>
                       </div>
                       <div className="flex items-center gap-1.5 text-emerald-400/80">
-                        <FiCheck className="w-3.5 h-3.5" />
+                        <Check className="w-3.5 h-3.5" />
                         <span>{dataset.stats?.reviewed_images || 0} reviewed</span>
                       </div>
                     </div>
@@ -284,21 +286,21 @@ export default function DatasetsTab() {
                     className="flex-1 bg-white text-black hover:bg-gray-200"
                     size="sm"
                   >
-                    Open <FiChevronRight className="ml-1" />
+                    Open <ChevronRight className="ml-1" />
                   </Button>
                   <Button
                     variant="ghost" size="icon"
                     onClick={() => handleExport(dataset.id)}
                     className="text-gray-400 hover:text-white hover:bg-white/5 h-8 w-8"
                   >
-                    <FiDownload className="w-3.5 h-3.5" />
+                    <Download className="w-3.5 h-3.5" />
                   </Button>
                   <Button
                     variant="ghost" size="icon"
                     onClick={() => handleDelete(dataset.id, dataset.name)}
                     className="text-gray-400 hover:text-red-400 hover:bg-red-400/10 h-8 w-8"
                   >
-                    <FiTrash2 className="w-3.5 h-3.5" />
+                    <Trash2 className="w-3.5 h-3.5" />
                   </Button>
                 </div>
               </div>

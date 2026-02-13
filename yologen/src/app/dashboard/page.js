@@ -13,9 +13,9 @@ import SettingsTab from "@/components/SettingsTab";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
-  FiActivity, FiDatabase, FiZap, FiCpu, FiBox,
-  FiSettings, FiLogOut, FiMenu, FiX, FiChevronLeft, FiChevronRight
-} from "react-icons/fi";
+  Activity, Database, Zap, Cpu, Box,
+  Settings, LogOut, Menu, X, ChevronLeft, ChevronRight
+} from "lucide-react";
 
 export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState("dashboard");
@@ -25,12 +25,12 @@ export default function DashboardPage() {
   const router = useRouter();
 
   const tabs = [
-    { id: "dashboard", label: "Overview", icon: FiActivity },
-    { id: "datasets", label: "Datasets", icon: FiDatabase },
-    { id: "inference", label: "Playground", icon: FiZap },
-    { id: "training", label: "Training", icon: FiCpu },
-    { id: "models", label: "Models", icon: FiBox },
-    { id: "settings", label: "Settings", icon: FiSettings },
+    { id: "dashboard", label: "Overview", icon: Activity },
+    { id: "datasets", label: "Datasets", icon: Database },
+    { id: "inference", label: "Playground", icon: Zap },
+    { id: "training", label: "Training", icon: Cpu },
+    { id: "models", label: "Models", icon: Box },
+    { id: "settings", label: "Settings", icon: Settings },
   ];
 
   return (
@@ -52,7 +52,7 @@ export default function DashboardPage() {
           <div className="h-16 flex items-center justify-between px-4 border-b border-white/5 shrink-0">
             <div className="flex items-center gap-2.5 overflow-hidden">
               <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shrink-0 shadow-lg shadow-indigo-500/20">
-                <FiZap className="text-white text-sm" />
+                <Zap className="text-white text-sm" />
               </div>
               {sidebarOpen && <span className="font-bold text-sm whitespace-nowrap">Nebula</span>}
             </div>
@@ -62,7 +62,7 @@ export default function DashboardPage() {
               onClick={() => setSidebarOpen(!sidebarOpen)}
               className="hidden lg:flex h-7 w-7 text-gray-500 hover:text-white shrink-0"
             >
-              {sidebarOpen ? <FiChevronLeft className="w-3.5 h-3.5" /> : <FiChevronRight className="w-3.5 h-3.5" />}
+              {sidebarOpen ? <ChevronLeft className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
             </Button>
           </div>
 
@@ -115,7 +115,7 @@ export default function DashboardPage() {
                   className="text-gray-500 hover:text-red-400 h-7 w-7 shrink-0"
                   title="Logout"
                 >
-                  <FiLogOut className="w-3.5 h-3.5" />
+                  <LogOut className="w-3.5 h-3.5" />
                 </Button>
               </div>
             ) : (
@@ -126,7 +126,7 @@ export default function DashboardPage() {
                 className="w-full text-gray-500 hover:text-red-400"
                 title="Logout"
               >
-                <FiLogOut className="w-4 h-4" />
+                <LogOut className="w-4 h-4" />
               </Button>
             )}
           </div>
@@ -143,7 +143,7 @@ export default function DashboardPage() {
                 onClick={() => setMobileSidebarOpen(true)}
                 className="lg:hidden h-8 w-8"
               >
-                <FiMenu />
+                <Menu />
               </Button>
               <h2 className="text-lg font-bold">
                 {tabs.find(t => t.id === activeTab)?.label || "Dashboard"}
