@@ -13,7 +13,8 @@ import { cn } from "@/lib/utils";
 import { toast } from 'sonner';
 import {
   Plus, Image, Box, Trash2, Download, Cpu,
-  Database, ChevronRight, Upload, Folder, Check
+  Database, ChevronRight, Upload, Folder, Check,
+  FolderKanban
 } from "lucide-react";
 
 export default function DatasetsTab() {
@@ -198,7 +199,7 @@ export default function DatasetsTab() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {datasets.map((dataset) => {
+          {datasets?.map((dataset) => {
             const total = dataset.stats?.total_images || 0;
             const annotated = dataset.stats?.annotated_images || 0;
             const progress = total > 0 ? Math.round((annotated / total) * 100) : 0;
@@ -212,7 +213,7 @@ export default function DatasetsTab() {
                   {/* Header */}
                   <div className="flex items-start justify-between mb-4">
                     <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-400 group-hover:bg-indigo-500/20 transition-all">
-                      <Database className="text-lg" />
+                      <FolderKanban className="text-lg" />
                     </div>
                     <Badge variant="outline" className="text-[10px] h-5 border-white/10">
                       {dataset.type || "Detection"}

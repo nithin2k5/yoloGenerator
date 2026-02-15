@@ -45,7 +45,7 @@ def create_sample_user():
                 INSERT INTO users (username, email, password_hash, role)
                 VALUES (%s, %s, %s, %s)
                 """,
-                ("admin", "admin@yologen.com", hashed_password, Role.ADMIN)
+                ("admin", "admin@nebulaml.com", hashed_password, Role.ADMIN)
             )
             connection.commit()
             print("✅ Created user 'admin'")
@@ -70,7 +70,7 @@ def create_sample_user():
                 INSERT INTO users (username, email, password_hash, role)
                 VALUES (%s, %s, %s, %s)
                 """,
-                ("user", "user@yologen.com", hashed_password, Role.USER)
+                ("user", "user@nebulaml.com", hashed_password, Role.USER)
             )
             connection.commit()
             print("✅ Created user 'user'")

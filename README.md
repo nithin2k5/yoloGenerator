@@ -1,4 +1,4 @@
-# YOLO Generator Platform
+# NebulaML Platform
 
 A complete ML training and inference platform for YOLO object detection models.
 
@@ -13,13 +13,13 @@ A complete ML training and inference platform for YOLO object detection models.
 
 ## 🛠️ Tech Stack
 
-### Frontend
+### Client (Frontend)
 - Next.js 14
 - Tailwind CSS
 - shadcn/ui components
 - React Icons
 
-### Backend
+### Server (Backend)
 - Python 3.8+
 - FastAPI
 - Ultralytics YOLO (YOLOv8)
@@ -36,16 +36,16 @@ A complete ML training and inference platform for YOLO object detection models.
 ### Quick Start
 
 1. Clone the repository:
-\`\`\`bash
+```bash
 git clone <repository-url>
-cd yoloGenerator
-\`\`\`
+cd NebulaML
+```
 
 2. Run the startup script:
-\`\`\`bash
+```bash
 chmod +x start.sh
 ./start.sh
-\`\`\`
+```
 
 This will:
 - Set up Python virtual environment
@@ -55,25 +55,25 @@ This will:
 
 ### Manual Setup
 
-#### Backend Setup
-\`\`\`bash
-cd backend
+#### Server Setup
+```bash
+cd server
 python -m venv venv
-source venv/bin/activate  # On Windows: venv\\Scripts\\activate
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 python main.py
-\`\`\`
+```
 
-The backend will run on `http://localhost:8000`
+The server will run on `http://localhost:8000`
 
-#### Frontend Setup
-\`\`\`bash
-cd yologen
+#### Client Setup
+```bash
+cd client
 npm install
 npm run dev
-\`\`\`
+```
 
-The frontend will run on `http://localhost:3000`
+The client will run on `http://localhost:3000`
 
 ## 📖 Usage
 
@@ -111,9 +111,9 @@ The platform features a sleek dark theme with violet accents:
 
 ## 📁 Project Structure
 
-\`\`\`
-yoloGenerator/
-├── backend/
+```
+NebulaML/
+├── server/
 │   ├── app/
 │   │   └── routes/
 │   │       ├── inference.py
@@ -124,7 +124,7 @@ yoloGenerator/
 │   │   └── trainer.py
 │   ├── main.py
 │   └── requirements.txt
-├── yologen/
+├── client/
 │   ├── src/
 │   │   ├── app/
 │   │   │   ├── page.js
@@ -138,7 +138,7 @@ yoloGenerator/
 │   ├── package.json
 │   └── tailwind.config.js
 └── start.sh
-\`\`\`
+```
 
 ## 🔧 API Endpoints
 
@@ -174,4 +174,4 @@ This project is licensed under the MIT License.
 - FastAPI for the backend framework
 
 ## Last Updated
-- 2026-02-01
+- 2026-02-16

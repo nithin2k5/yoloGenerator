@@ -37,9 +37,9 @@ export default function DashboardStats({ onNavigate }) {
         const datasets = Array.isArray(rawDatasets) ? rawDatasets : (rawDatasets.datasets || []);
         totalDatasets = datasets.length;
 
-        const statsPromises = datasets.map(ds =>
+        const statsPromises = datasets?.map(ds =>
           fetch(API_ENDPOINTS.DATASETS.STATS(ds.id)).then(r => r.ok ? r.json() : null).catch(() => null)
-        );
+        ) || [];
         const allStats = await Promise.allSettled(statsPromises);
         allStats.forEach(result => {
           if (result.status === 'fulfilled' && result.value) {

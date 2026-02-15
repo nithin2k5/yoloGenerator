@@ -4,8 +4,8 @@ echo "🚀 Starting YOLO Generator Platform..."
 
 # Check if Python backend is running
 if ! lsof -Pi :8000 -sTCP:LISTEN -t >/dev/null ; then
-    echo "📦 Starting Python Backend on port 8000..."
-    cd backend
+    echo "📦 Starting Python Server on port 8000..."
+    cd server
     
     # Check if virtual environment exists
     if [ ! -d "venv" ]; then
@@ -24,17 +24,17 @@ if ! lsof -Pi :8000 -sTCP:LISTEN -t >/dev/null ; then
     echo "Starting FastAPI server..."
     python main.py &
     BACKEND_PID=$!
-    echo "✅ Backend started with PID: $BACKEND_PID"
+    echo "✅ Server started with PID: $BACKEND_PID"
     
     cd ..
 else
-    echo "✅ Backend already running on port 8000"
+    echo "✅ Server already running on port 8000"
 fi
 
 # Check if Next.js frontend is running
 if ! lsof -Pi :3000 -sTCP:LISTEN -t >/dev/null ; then
-    echo "🎨 Starting Next.js Frontend on port 3000..."
-    cd yologen
+    echo "🎨 Starting Next.js Client on port 3000..."
+    cd client
     
     # Install dependencies if needed
     if [ ! -d "node_modules" ]; then

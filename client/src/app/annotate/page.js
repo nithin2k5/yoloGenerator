@@ -884,6 +884,12 @@ function AnnotationToolContent() {
                 <Save className="mr-2 w-3.5 h-3.5" /> Save
               </Button>
               <Button
+                onClick={() => setShowAutoLabel(true)}
+                className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 h-9 text-sm border-0"
+              >
+                <Sparkles className="mr-2 w-3.5 h-3.5" /> Auto Label
+              </Button>
+              <Button
                 onClick={async () => {
                   if (!datasetId) return;
                   await fetchStats();
