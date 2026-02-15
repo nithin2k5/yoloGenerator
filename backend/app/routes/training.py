@@ -49,6 +49,7 @@ class TrainingConfig(BaseModel):
 class DatasetTrainingRequest(BaseModel):
     dataset_id: str
     config: TrainingConfig
+    classes: Optional[List[str]] = None  # Optional list of class names to filter
 
 @router.post("/start")
 async def start_training(
@@ -233,6 +234,12 @@ async def start_training_from_dataset(
             logger.info(f"Dataset {request.dataset_id} not exported. Auto-exporting...")
             
             # Import export logic
+            import sys
+            from pathlib import Path as PathLib
+            backend_path = PathLib(__file__).parent.parent.parent
+            if str(backend_path) not in sys.path:
+                sys.path.insert(0, str(backend_path))
+
             from database_service import DatasetService
             import shutil
             import random
@@ -318,7 +325,7 @@ val: val/images
         # Generate job ID
         job_id = str(uuid.uuid4())
         
-        # Initialize training job
+        # Default config in job init
         training_jobs[job_id] = {
             "status": "pending",
             "config": request.config.dict(),
@@ -326,11 +333,56 @@ val: val/images
             "dataset_id": request.dataset_id
         }
         
+        # Handle Class Filtering
+        final_yaml_path = str(yaml_path)
+        
+        if request.classes:
+            # Get original dataset to check all classes
+            import sys
+            from pathlib import Path as PathLib
+            # Ensure backend path is in sys.path
+            backend_path = PathLib(__file__).parent.parent.parent
+            if str(backend_path) not in sys.path:
+                sys.path.insert(0, str(backend_path))
+            
+            from database_service import DatasetService
+            from utils.dataset_utils import create_filtered_dataset
+            
+            dataset_info = DatasetService.get_dataset(request.dataset_id)
+            if dataset_info:
+                all_classes = dataset_info.get("classes", [])
+                
+                # Check if we actually need to filter (unordered set comparison)
+                if set(request.classes) != set(all_classes):
+                    logger.info(f"Filtering dataset for classes: {request.classes}")
+                    
+                    # Create temporary directory for filtered dataset
+                    temp_dir = Path(tempfile.gettempdir()) / "yolo_training" / job_id / "filtered"
+                    
+                    try:
+                        filtered_yaml = create_filtered_dataset(
+                            original_yaml_path=str(yaml_path),
+                            target_dir=str(temp_dir),
+                            selected_classes=request.classes
+                        )
+                        final_yaml_path = filtered_yaml
+                        logger.info(f"Created filtered dataset at: {final_yaml_path}")
+                        
+                        # Update job info to reflect filtering
+                        training_jobs[job_id]["filtered_classes"] = request.classes
+                        
+                    except Exception as e:
+                        logger.error(f"Failed to create filtered dataset: {e}")
+                        # If filtering fails, we might want to abort or fall back. 
+                        # Aborting is safer to avoid training on wrong data.
+                        raise HTTPException(status_code=500, detail=f"Failed to prepare filtered dataset: {str(e)}")
+
+        
         # Add training to background tasks
         background_tasks.add_task(
             run_training,
             job_id,
-            str(yaml_path),
+            final_yaml_path,
             request.config
         )
         

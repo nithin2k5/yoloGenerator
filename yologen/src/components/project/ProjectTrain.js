@@ -20,6 +20,42 @@ export default function ProjectTrain({ dataset }) {
         learning_rate: 0.01
     });
     const [training, setTraining] = useState(false);
+    const [selectedClasses, setSelectedClasses] = useState([]);
+
+    // Initialize with all classes selected
+    useState(() => {
+        if (dataset?.classes) {
+            setSelectedClasses([...dataset.classes]);
+        }
+    }, [dataset]);
+
+    const toggleClass = (cls) => {
+        if (selectedClasses.includes(cls)) {
+            // Don't allow deselecting the last class
+            if (selectedClasses.length <= 1) {
+                toast.error("At least one class must be selected");
+                return;
+            }
+            setSelectedClasses(selectedClasses.filter(c => c !== cls));
+        } else {
+            setSelectedClasses([...selectedClasses, cls]);
+        }
+    };
+
+    const toggleAll = () => {
+        if (selectedClasses.length === dataset.classes.length) {
+            // Deselect all? No, maybe select just the first one or show error?
+            // Usually toggle all means select all or deselect all. 
+            // Since we need at least one, let's just reset to all if not all are selected, 
+            // or maybe do nothing if all are selected (or clear to 1?).
+            // Let's make it "Reset to All" if some are unselected, and "Clear" is risky.
+            // Better behavior: If all selected, select none? No.
+            // Let's just have "Select All" button.
+            setSelectedClasses([...dataset.classes]);
+        } else {
+            setSelectedClasses([...dataset.classes]);
+        }
+    };
 
     const startTraining = async () => {
         setTraining(true);
@@ -29,7 +65,8 @@ export default function ProjectTrain({ dataset }) {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     dataset_id: dataset.id,
-                    config: config
+                    config: config,
+                    classes: selectedClasses // Send selected classes
                 })
             });
 
@@ -121,6 +158,43 @@ export default function ProjectTrain({ dataset }) {
                             </div>
                         </CardContent>
                     </Card>
+
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="flex justify-between items-center">
+                                <span>Class Selection</span>
+                                <Button variant="ghost" size="sm" onClick={toggleAll}>
+                                    Select All ({dataset.classes?.length})
+                                </Button>
+                            </CardTitle>
+                            <CardDescription>Select which classes to include in training</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="flex flex-wrap gap-2">
+                                {dataset.classes?.map((cls, i) => {
+                                    const isSelected = selectedClasses.includes(cls);
+                                    return (
+                                        <Badge
+                                            key={i}
+                                            variant={isSelected ? "default" : "outline"}
+                                            className="cursor-pointer text-sm py-1 px-3 hover:opacity-80 transition-all select-none"
+                                            onClick={() => toggleClass(cls)}
+                                        >
+                                            {cls}
+                                            {isSelected && <span className="ml-1">✓</span>}
+                                        </Badge>
+                                    );
+                                })}
+                            </div>
+                            {selectedClasses.length === 0 && (
+                                <p className="text-destructive text-sm mt-2">Please select at least one class.</p>
+                            )}
+                            <p className="text-muted-foreground text-xs mt-4">
+                                {selectedClasses.length} of {dataset.classes?.length} classes selected.
+                                Backend will create a temporary filtered dataset for this training job.
+                            </p>
+                        </CardContent>
+                    </Card>
                 </div>
 
                 <div className="space-y-6">
@@ -138,11 +212,15 @@ export default function ProjectTrain({ dataset }) {
                                     <span className="text-muted-foreground flex items-center gap-2">
                                         <Clock /> Time
                                     </span>
-                                    <span>~{(config.epochs * 0.5).toFixed(1)} mins</span>
+                                    <span>~{(config.epochs * 0.5 * (selectedClasses.length / (dataset.classes?.length || 1))).toFixed(1)} mins</span>
                                 </div>
                             </div>
 
-                            <Button className="w-full mt-6" onClick={startTraining} disabled={training}>
+                            <Button
+                                className="w-full mt-6"
+                                onClick={startTraining}
+                                disabled={training || selectedClasses.length === 0}
+                            >
                                 {training ? "Starting..." : "Start Training"}
                                 {!training && <Play className="ml-2" />}
                             </Button>
