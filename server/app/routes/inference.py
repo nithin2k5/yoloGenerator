@@ -19,7 +19,9 @@ async def predict_image(
     file: UploadFile = File(...),
     confidence: Optional[float] = Form(0.25),
     model_name: Optional[str] = Form("yolov8n.pt"),
-    job_id: Optional[str] = Form(None)
+    job_id: Optional[str] = Form(None),
+    agnostic_nms: Optional[bool] = Form(False),
+    augment: Optional[bool] = Form(False)
 ):
     """
     Run inference on uploaded image. 
@@ -64,7 +66,12 @@ async def predict_image(
             await out_file.write(content)
         
         # Run inference
-        detections = inference_model.predict(str(temp_file), conf_threshold=confidence)
+        detections = inference_model.predict(
+            str(temp_file), 
+            conf_threshold=confidence,
+            agnostic_nms=agnostic_nms,
+            augment=augment
+        )
         
         # Clean up
         os.remove(temp_file)
@@ -82,7 +89,9 @@ async def predict_image(
 @router.post("/predict-batch")
 async def predict_batch(
     files: List[UploadFile] = File(...),
-    confidence: Optional[float] = Form(0.25)
+    confidence: Optional[float] = Form(0.25),
+    agnostic_nms: Optional[bool] = Form(False),
+    augment: Optional[bool] = Form(False)
 ):
     """
     Run inference on multiple images
@@ -110,7 +119,9 @@ async def predict_batch(
         # Run batch inference
         all_detections = inference_model.predict_batch(
             [str(f) for f in temp_files],
-            conf_threshold=confidence
+            conf_threshold=confidence,
+            agnostic_nms=agnostic_nms,
+            augment=augment
         )
         
         # Format results

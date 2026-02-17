@@ -187,3 +187,131 @@ def create_filtered_dataset(
         yaml.dump(new_yaml_content, f, sort_keys=False)
         
     return str(new_yaml_path)
+
+def split_dataset_stratified(
+    images: List[Dict],
+    train_ratio: float = 0.7,
+    val_ratio: float = 0.2,
+    test_ratio: float = 0.1,
+    seed: int = 42
+) -> Dict[str, List[Dict]]:
+    """
+    Split dataset into train/val/test sets using stratified sampling 
+    to maintain class distribution.
+    
+    Args:
+        images: List of image dictionaries. Each dict must have 'id' and 'annotations' 
+                (list of dicts with 'class_name').
+        train_ratio: Proportion of images for training
+        val_ratio: Proportion of images for validation
+        test_ratio: Proportion of images for testing
+        seed: Random seed for reproducibility
+        
+    Returns:
+        Dictionary with 'train', 'val', 'test' lists of images
+    """
+    import random
+    from collections import defaultdict, Counter
+    
+    random.seed(seed)
+    
+    # Normalize ratios
+    total_ratio = train_ratio + val_ratio + test_ratio
+    train_ratio /= total_ratio
+    val_ratio /= total_ratio
+    test_ratio /= total_ratio
+    
+    # helper to get class counts for an image
+    def get_image_classes(img):
+        classes = set()
+        if 'annotations' in img:
+            for ann in img['annotations']:
+                if 'class_name' in ann:
+                    classes.add(ann['class_name'])
+        # Also check for 'classes' list if pre-processed
+        if 'classes' in img:
+            classes.update(img['classes'])
+        return list(classes)
+
+    # 1. Organize images by their "rarest" class
+    # First tally all class counts
+    global_class_counts = Counter()
+    image_classes_map = {}
+    
+    for img in images:
+        classes = get_image_classes(img)
+        image_classes_map[img['id']] = classes
+        for c in classes:
+            global_class_counts[c] += 1
+            
+    if not global_class_counts:
+        # Fallback to random split if no classes found
+        shuffled = images.copy()
+        random.shuffle(shuffled)
+        n_train = int(len(shuffled) * train_ratio)
+        n_val = int(len(shuffled) * val_ratio)
+        
+        return {
+            'train': shuffled[:n_train],
+            'val': shuffled[n_train:n_train+n_val],
+            'test': shuffled[n_train+n_val:]
+        }
+    
+    # Sort classes by frequency (rare to common)
+    sorted_classes = sorted(global_class_counts.keys(), key=lambda k: global_class_counts[k])
+    
+    # Bucket images by their rarest class
+    # An image belongs to the bucket of its rarest class
+    buckets = defaultdict(list)
+    
+    for img in images:
+        classes = image_classes_map[img['id']]
+        if not classes:
+            buckets['__background__'].append(img)
+            continue
+            
+        # Find rarest class in this image
+        rarest_class = min(classes, key=lambda c: global_class_counts[c])
+        buckets[rarest_class].append(img)
+        
+    # 2. Split each bucket
+    train_set = []
+    val_set = []
+    test_set = []
+    
+    for class_name, bucket_images in buckets.items():
+        random.shuffle(bucket_images)
+        
+        n_total = len(bucket_images)
+        n_train = int(n_total * train_ratio)
+        n_val = int(n_total * val_ratio)
+        # Ensure at least one sample if possible, priority to train, then val
+        if n_total > 0 and n_train == 0:
+            n_train = 1
+            n_val = 0
+        elif n_total > 1 and n_val == 0 and val_ratio > 0:
+            n_val = 1
+            # Adjust train if we took the only one
+            if n_train + n_val > n_total:
+                n_train = max(0, n_total - n_val)
+                
+        # Split
+        train_chunk = bucket_images[:n_train]
+        val_chunk = bucket_images[n_train:n_train+n_val]
+        test_chunk = bucket_images[n_train+n_val:]
+        
+        train_set.extend(train_chunk)
+        val_set.extend(val_chunk)
+        test_set.extend(test_chunk)
+        
+    # Shuffle final sets
+    random.shuffle(train_set)
+    random.shuffle(val_set)
+    random.shuffle(test_set)
+    
+    return {
+        'train': train_set,
+        'val': val_set,
+        'test': test_set
+    }
+

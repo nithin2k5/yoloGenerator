@@ -11,8 +11,13 @@ import uuid
 import logging
 import sys
 
+import shutil
+
 # Import trainer
 from models.trainer import YOLOTrainer
+from dataset_analyzer import DatasetAnalyzer
+from database_service import DatasetService
+from utils.dataset_utils import split_dataset_stratified
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -29,6 +34,7 @@ class TrainingConfig(BaseModel):
     patience: Optional[int] = Field(default=50, ge=1, le=200, description="Early stopping patience")
     device: Optional[str] = Field(default=None, description="Device (cpu, cuda, mps, or None for auto)")
     strict_epochs: bool = Field(default=False, description="If True, enforce exact epoch count (disable early stopping)")
+    augmentations: Optional[Dict[str, Any]] = Field(default=None, description="Data augmentation parameters")
     
     @validator('epochs')
     def validate_epochs(cls, v):
@@ -159,6 +165,10 @@ async def run_training(job_id: str, data_yaml: str, config: TrainingConfig):
         if config.device:
             train_params["device"] = config.device
         
+        # Add augmentations if present
+        if config.augmentations:
+            train_params["augmentations"] = config.augmentations
+        
         # Run training
         logger.info(f"Training parameters: {train_params}")
         results = trainer.train(**train_params)
@@ -225,24 +235,23 @@ async def start_training_from_dataset(
     Start training from an exported dataset. Auto-exports if not already exported.
     """
     try:
+        # Analyze dataset first
+        try:
+            analysis = DatasetAnalyzer.analyze_dataset(request.dataset_id)
+            # Apply recommended augmentations if not manually specified
+            if not request.config.augmentations:
+                request.config.augmentations = analysis.augmentation_recommendations
+                logger.info(f"Applied recommended augmentations: {request.config.augmentations}")
+        except Exception as e:
+            logger.warning(f"Failed to analyze dataset: {e}")
+
         # Check if dataset exists
         dataset_path = Path(f"datasets/{request.dataset_id}")
         yaml_path = dataset_path / "data.yaml"
         
         # If dataset not exported, export it first
         if not yaml_path.exists():
-            logger.info(f"Dataset {request.dataset_id} not exported. Auto-exporting...")
-            
-            # Import export logic
-            import sys
-            from pathlib import Path as PathLib
-            backend_path = PathLib(__file__).parent.parent.parent
-            if str(backend_path) not in sys.path:
-                sys.path.insert(0, str(backend_path))
-
-            from database_service import DatasetService
-            import shutil
-            import random
+            logger.info(f"Dataset {request.dataset_id} not exported. Auto-exporting with stratified split...")
             
             # Get dataset
             dataset = DatasetService.get_dataset(request.dataset_id)
@@ -256,42 +265,26 @@ async def start_training_from_dataset(
             if not annotated_images:
                 raise HTTPException(status_code=400, detail="No annotated images in dataset")
             
-            # Check for manual splits
-            images_with_split = [img for img in annotated_images if img.get("split")]
+            # Perform stratified split
+            splits = split_dataset_stratified(annotated_images)
             
-            if images_with_split:
-                train_images = [img for img in annotated_images if img.get("split") == "train"]
-                val_images = [img for img in annotated_images if img.get("split") == "val"]
-                test_images = [img for img in annotated_images if img.get("split") == "test"]
-                train_images.extend([img for img in annotated_images if not img.get("split")])
-            else:
-                random.shuffle(annotated_images)
-                split_idx = int(len(annotated_images) * 0.8)
-                train_images = annotated_images[:split_idx]
-                val_images = annotated_images[split_idx:]
-                test_images = []
-            
-            # Create split directories
-            train_dir = dataset_path / "split" / "train"
-            val_dir = dataset_path / "split" / "val"
-            test_dir = dataset_path / "split" / "test"
-            
-            for split_dir, images, _ in [(train_dir, train_images, "train"), (val_dir, val_images, "val"), (test_dir, test_images, "test")]:
-                if images:
-                    (split_dir / "images").mkdir(parents=True, exist_ok=True)
-                    (split_dir / "labels").mkdir(parents=True, exist_ok=True)
+            # Create split directories and copy files
+            for split_name, images in splits.items():
+                split_dir = dataset_path / "split" / split_name
+                (split_dir / "images").mkdir(parents=True, exist_ok=True)
+                (split_dir / "labels").mkdir(parents=True, exist_ok=True)
+                
+                for img in images:
+                    src_img = dataset_path / "images" / img["filename"]
+                    dst_img = split_dir / "images" / img["filename"]
+                    if src_img.exists():
+                        shutil.copy2(src_img, dst_img)
                     
-                    for img in images:
-                        src_img = dataset_path / "images" / img["filename"]
-                        dst_img = split_dir / "images" / img["filename"]
-                        if src_img.exists():
-                            shutil.copy2(src_img, dst_img)
-                        
-                        label_name = f"{Path(img['filename']).stem}.txt"
-                        src_label = dataset_path / "labels" / label_name
-                        dst_label = split_dir / "labels" / label_name
-                        if src_label.exists():
-                            shutil.copy2(src_label, dst_label)
+                    label_name = f"{Path(img['filename']).stem}.txt"
+                    src_label = dataset_path / "labels" / label_name
+                    dst_label = split_dir / "labels" / label_name
+                    if src_label.exists():
+                        shutil.copy2(src_label, dst_label)
             
             # Create data.yaml
             split_path = (dataset_path / 'split').resolve()
@@ -301,11 +294,11 @@ async def start_training_from_dataset(
 path: {split_path}
 train: train/images
 val: val/images
+test: test/images
+
+# Classes
+names:
 """
-            if test_images:
-                yaml_content += "test: test/images\n"
-            
-            yaml_content += "\n# Classes\nnames:\n"
             for idx, class_name in enumerate(dataset["classes"]):
                 yaml_content += f"  {idx}: {class_name}\n"
             yaml_content += f"\nnc: {len(dataset['classes'])}\n"
@@ -337,29 +330,20 @@ val: val/images
         final_yaml_path = str(yaml_path)
         
         if request.classes:
-            # Get original dataset to check all classes
-            import sys
-            from pathlib import Path as PathLib
-            # Ensure backend path is in sys.path
-            backend_path = PathLib(__file__).parent.parent.parent
-            if str(backend_path) not in sys.path:
-                sys.path.insert(0, str(backend_path))
-            
-            from database_service import DatasetService
-            from utils.dataset_utils import create_filtered_dataset
-            
-            dataset_info = DatasetService.get_dataset(request.dataset_id)
-            if dataset_info:
-                all_classes = dataset_info.get("classes", [])
+            try:
+                from utils.dataset_utils import create_filtered_dataset
                 
-                # Check if we actually need to filter (unordered set comparison)
-                if set(request.classes) != set(all_classes):
-                    logger.info(f"Filtering dataset for classes: {request.classes}")
+                dataset_info = DatasetService.get_dataset(request.dataset_id)
+                if dataset_info:
+                    all_classes = dataset_info.get("classes", [])
                     
-                    # Create temporary directory for filtered dataset
-                    temp_dir = Path(tempfile.gettempdir()) / "yolo_training" / job_id / "filtered"
-                    
-                    try:
+                    # Check if we actually need to filter (unordered set comparison)
+                    if set(request.classes) != set(all_classes):
+                        logger.info(f"Filtering dataset for classes: {request.classes}")
+                        
+                        # Create temporary directory for filtered dataset
+                        temp_dir = Path(tempfile.gettempdir()) / "yolo_training" / job_id / "filtered"
+                        
                         filtered_yaml = create_filtered_dataset(
                             original_yaml_path=str(yaml_path),
                             target_dir=str(temp_dir),
@@ -371,11 +355,9 @@ val: val/images
                         # Update job info to reflect filtering
                         training_jobs[job_id]["filtered_classes"] = request.classes
                         
-                    except Exception as e:
-                        logger.error(f"Failed to create filtered dataset: {e}")
-                        # If filtering fails, we might want to abort or fall back. 
-                        # Aborting is safer to avoid training on wrong data.
-                        raise HTTPException(status_code=500, detail=f"Failed to prepare filtered dataset: {str(e)}")
+            except Exception as e:
+                logger.error(f"Failed to create filtered dataset: {e}")
+                raise HTTPException(status_code=500, detail=f"Failed to prepare filtered dataset: {str(e)}")
 
         
         # Add training to background tasks
@@ -407,22 +389,23 @@ async def export_and_train(
     Export dataset and start training in one operation (strict training mode)
     """
     try:
+        # Analyze dataset first
+        try:
+            analysis = DatasetAnalyzer.analyze_dataset(request.dataset_id)
+            # Apply recommended augmentations if not manually specified
+            if not request.config.augmentations:
+                request.config.augmentations = analysis.augmentation_recommendations
+                logger.info(f"Applied recommended augmentations: {request.config.augmentations}")
+        except Exception as e:
+            logger.warning(f"Failed to analyze dataset: {e}")
+
         # First, export the dataset
         dataset_path = Path(f"datasets/{request.dataset_id}")
         yaml_path = dataset_path / "data.yaml"
         
         # Check if already exported, if not export it
         if not yaml_path.exists():
-            # Import database service for export logic
-            import sys
-            from pathlib import Path as PathLib
-            backend_path = PathLib(__file__).parent.parent.parent
-            if str(backend_path) not in sys.path:
-                sys.path.insert(0, str(backend_path))
-            
-            from database_service import DatasetService
-            import shutil
-            import random
+            logger.info(f"Dataset {request.dataset_id} not exported. Auto-exporting with stratified split...")
             
             # Get dataset
             dataset = DatasetService.get_dataset(request.dataset_id)
@@ -436,42 +419,26 @@ async def export_and_train(
             if not annotated_images:
                 raise HTTPException(status_code=400, detail="No annotated images in dataset")
             
-            # Check for manual splits
-            images_with_split = [img for img in annotated_images if img.get("split")]
+            # Perform stratified split
+            splits = split_dataset_stratified(annotated_images)
             
-            if images_with_split:
-                train_images = [img for img in annotated_images if img.get("split") == "train"]
-                val_images = [img for img in annotated_images if img.get("split") == "val"]
-                test_images = [img for img in annotated_images if img.get("split") == "test"]
-                train_images.extend([img for img in annotated_images if not img.get("split")])
-            else:
-                random.shuffle(annotated_images)
-                split_idx = int(len(annotated_images) * 0.8)
-                train_images = annotated_images[:split_idx]
-                val_images = annotated_images[split_idx:]
-                test_images = []
-            
-            # Create split directories
-            train_dir = dataset_path / "split" / "train"
-            val_dir = dataset_path / "split" / "val"
-            test_dir = dataset_path / "split" / "test"
-            
-            for split_dir, images, _ in [(train_dir, train_images, "train"), (val_dir, val_images, "val"), (test_dir, test_images, "test")]:
-                if images:
-                    (split_dir / "images").mkdir(parents=True, exist_ok=True)
-                    (split_dir / "labels").mkdir(parents=True, exist_ok=True)
+            # Create split directories and copy files
+            for split_name, images in splits.items():
+                split_dir = dataset_path / "split" / split_name
+                (split_dir / "images").mkdir(parents=True, exist_ok=True)
+                (split_dir / "labels").mkdir(parents=True, exist_ok=True)
+                
+                for img in images:
+                    src_img = dataset_path / "images" / img["filename"]
+                    dst_img = split_dir / "images" / img["filename"]
+                    if src_img.exists():
+                        shutil.copy2(src_img, dst_img)
                     
-                    for img in images:
-                        src_img = dataset_path / "images" / img["filename"]
-                        dst_img = split_dir / "images" / img["filename"]
-                        if src_img.exists():
-                            shutil.copy2(src_img, dst_img)
-                        
-                        label_name = f"{Path(img['filename']).stem}.txt"
-                        src_label = dataset_path / "labels" / label_name
-                        dst_label = split_dir / "labels" / label_name
-                        if src_label.exists():
-                            shutil.copy2(src_label, dst_label)
+                    label_name = f"{Path(img['filename']).stem}.txt"
+                    src_label = dataset_path / "labels" / label_name
+                    dst_label = split_dir / "labels" / label_name
+                    if src_label.exists():
+                        shutil.copy2(src_label, dst_label)
             
             # Create data.yaml
             split_path = (dataset_path / 'split').resolve()
@@ -481,11 +448,11 @@ async def export_and_train(
 path: {split_path}
 train: train/images
 val: val/images
+test: test/images
+
+# Classes
+names:
 """
-            if test_images:
-                yaml_content += "test: test/images\n"
-            
-            yaml_content += "\n# Classes\nnames:\n"
             for idx, class_name in enumerate(dataset["classes"]):
                 yaml_content += f"  {idx}: {class_name}\n"
             yaml_content += f"\nnc: {len(dataset['classes'])}\n"
@@ -530,7 +497,8 @@ val: val/images
             "job_id": job_id,
             "message": "Dataset exported and strict training started",
             "strict_epochs": True,
-            "epochs": request.config.epochs
+            "epochs": request.config.epochs,
+            "augmentations": request.config.augmentations
         })
         
     except Exception as e:

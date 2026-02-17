@@ -13,6 +13,7 @@ import {
   Upload, Play, Square, RefreshCw, Terminal,
   CheckCircle, XCircle, Clock, Cpu, TrendingUp
 } from "lucide-react";
+import GamifiedTerminal from "./GamifiedTerminal";
 
 export default function TrainingTab() {
   const [config, setConfig] = useState({
@@ -303,13 +304,10 @@ export default function TrainingTab() {
                 )}
 
                 {/* Log Output */}
-                {job.output && (
-                  <div className="border-t border-white/5 p-4">
-                    <pre className="bg-black/40 rounded-lg p-3 text-xs text-gray-400 max-h-32 overflow-y-auto custom-scrollbar font-mono whitespace-pre-wrap">
-                      {job.output}
-                    </pre>
-                  </div>
-                )}
+                <GamifiedTerminal
+                  output={job.output}
+                  isRunning={job.status === "running"}
+                />
               </div>
             ))
           )}

@@ -289,6 +289,7 @@ async def save_annotation(request: dict):
     height = request.get("height")
     boxes = request.get("boxes", [])
     status = request.get("status", "annotated") # Default to annotated if manually saved
+    split = request.get("split")
 
     # Validate split if provided
     if split and split not in ["train", "val", "test"]:

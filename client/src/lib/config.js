@@ -19,5 +19,8 @@ export const API_ENDPOINTS = {
     },
     INFERENCE: {
         PREDICT: `${API_BASE_URL}/api/inference/predict`,
+    },
+    MODELS: {
+        LIST: `${API_BASE_URL}/api/inference/models`,
     }
 };
