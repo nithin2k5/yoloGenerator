@@ -15,6 +15,58 @@ import {
 } from "lucide-react";
 import GamifiedTerminal from "./GamifiedTerminal";
 
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+
+function JobMetricsChart({ jobId, status }) {
+  const [metrics, setMetrics] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchMetrics();
+    // Poll only if running
+    if (status === 'running') {
+      const interval = setInterval(fetchMetrics, 3000);
+      return () => clearInterval(interval);
+    }
+  }, [jobId, status]);
+
+  const fetchMetrics = async () => {
+    try {
+      const res = await fetch(`http://localhost:8000/api/training/job/${jobId}/metrics`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.metrics) setMetrics(data.metrics);
+      }
+    } catch (e) {
+      console.error("Error fetching metrics:", e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading && metrics.length === 0) return <div className="h-48 flex items-center justify-center text-xs text-muted-foreground">Loading metrics...</div>;
+  if (metrics.length === 0) return null; // No metrics yet
+
+  return (
+    <div className="h-64 w-full mt-4 bg-black/20 rounded-lg p-2 border border-white/5">
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={metrics}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#333" />
+          <XAxis dataKey="epoch" stroke="#666" fontSize={10} tickFormatter={(v) => `Ep ${v}`} />
+          <YAxis stroke="#666" fontSize={10} />
+          <Tooltip
+            contentStyle={{ backgroundColor: '#111', border: '1px solid #333', fontSize: '12px' }}
+            itemStyle={{ padding: 0 }}
+          />
+          <Legend />
+          <Line type="monotone" dataKey="train/box_loss" stroke="#f59e0b" dot={false} strokeWidth={2} name="Box Loss" />
+          <Line type="monotone" dataKey="metrics/mAP50(B)" stroke="#10b981" dot={false} strokeWidth={2} name="mAP@50" />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
 export default function TrainingTab() {
   const [config, setConfig] = useState({
     model_name: "yolov8n",
@@ -40,7 +92,9 @@ export default function TrainingTab() {
       const response = await fetch("http://localhost:8000/api/training/jobs");
       if (response.ok) {
         const data = await response.json();
-        setJobs(data.jobs || []);
+        // Sort jobs by created time descending if possible, or just reverse
+        // Assuming the list is chronological, we want newest first
+        setJobs((data.jobs || []).reverse());
       }
     } catch (error) {
       console.error("Error fetching jobs:", error);
@@ -164,10 +218,10 @@ export default function TrainingTab() {
                 >
                   <SelectTrigger className="bg-black/30 border-white/10"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="yolov8n">YOLOv8 Nano</SelectItem>
-                    <SelectItem value="yolov8s">YOLOv8 Small</SelectItem>
-                    <SelectItem value="yolov8m">YOLOv8 Medium</SelectItem>
-                    <SelectItem value="yolov8l">YOLOv8 Large</SelectItem>
+                    <SelectItem value="yolov8n.pt">YOLOv8 Nano</SelectItem>
+                    <SelectItem value="yolov8s.pt">YOLOv8 Small</SelectItem>
+                    <SelectItem value="yolov8m.pt">YOLOv8 Medium</SelectItem>
+                    <SelectItem value="yolov8l.pt">YOLOv8 Large</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -300,6 +354,9 @@ export default function TrainingTab() {
                         )}
                       </div>
                     )}
+
+                    {/* Live Charts */}
+                    <JobMetricsChart jobId={job.job_id} status={job.status} />
                   </div>
                 )}
 
@@ -316,3 +373,4 @@ export default function TrainingTab() {
     </div>
   );
 }
+

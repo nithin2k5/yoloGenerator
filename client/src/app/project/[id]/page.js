@@ -93,6 +93,39 @@ export default function ProjectPage() {
     if (loading) return <div className="p-8">Loading project...</div>;
     if (!dataset) return <div className="p-8">Project not found</div>;
 
+    // Pipeline Stages Data
+    const pipelineStages = [
+        {
+            id: 'upload',
+            label: 'Upload',
+            icon: Upload,
+            status: (stats?.total_images > 0) ? 'complete' : 'pending',
+            meta: `${stats?.total_images || 0} Images`
+        },
+        {
+            id: 'annotate',
+            label: 'Annotate',
+            icon: Image,
+            status: (stats?.annotated_images > 0 && stats?.annotated_images === stats?.total_images) ? 'complete' :
+                (stats?.annotated_images > 0) ? 'inprogress' : 'pending',
+            meta: `${Math.round(stats?.completion_percentage || 0)}% Done`
+        },
+        {
+            id: 'train',
+            label: 'Train',
+            icon: Cpu,
+            status: 'pending', // TODO: Check for trained models
+            meta: 'No Models'
+        },
+        {
+            id: 'deploy',
+            label: 'Deploy',
+            icon: Code,
+            status: 'pending',
+            meta: 'Not Deployed'
+        }
+    ];
+
     return (
         <div className="flex flex-col h-screen overflow-hidden">
             {/* Project Header */}
@@ -111,13 +144,42 @@ export default function ProjectPage() {
                 </div>
 
                 <div className="flex items-center gap-2">
-                    {/* Global Project Actions if any */}
+                    <Button size="sm" onClick={() => router.push(`/annotate?dataset=${dataset.id}`)}>
+                        Resmue Annotating
+                    </Button>
                 </div>
             </header>
 
+            {/* Pipeline Visualizer (Quick Nav) */}
+            <div className="px-6 py-4 bg-muted/5 border-b border-border">
+                <div className="flex items-center justify-between max-w-4xl mx-auto relative">
+                    {/* Connecting Line */}
+                    <div className="absolute top-1/2 left-0 w-full h-0.5 bg-border -z-10 -translate-y-1/2" />
+
+                    {pipelineStages.map((stage, idx) => (
+                        <div
+                            key={stage.id}
+                            onClick={() => handleTabChange(stage.id)}
+                            className={`flex flex-col items-center gap-2 cursor-pointer group bg-background px-4 py-2 rounded-xl border transition-all hover:scale-105 ${activeTab === stage.id ? 'border-primary ring-2 ring-primary/20' : 'border-border'}`}
+                        >
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center border-2 ${stage.status === 'complete' ? 'bg-green-500/10 border-green-500 text-green-500' :
+                                    stage.status === 'inprogress' ? 'bg-amber-500/10 border-amber-500 text-amber-500' :
+                                        'bg-muted border-muted-foreground/30 text-muted-foreground'
+                                }`}>
+                                <stage.icon className="w-5 h-5" />
+                            </div>
+                            <div className="text-center">
+                                <p className={`text-xs font-semibold ${activeTab === stage.id ? 'text-primary' : 'text-foreground'}`}>{stage.label}</p>
+                                <p className="text-[10px] text-muted-foreground">{stage.meta}</p>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+
             {/* Tabs Navigation similar to Roboflow */}
             <Tabs value={activeTab} onValueChange={handleTabChange} className="flex-1 flex flex-col min-h-0">
-                <div className="border-b border-border bg-muted/5 px-6">
+                <div className="border-b border-border bg-muted/5 px-6 hidden">
                     <TabsList className="h-12 bg-transparent p-0 gap-6">
                         <TabTrigger value="overview" icon={Grid}>Overview</TabTrigger>
                         <TabTrigger value="upload" icon={Upload}>Upload</TabTrigger>

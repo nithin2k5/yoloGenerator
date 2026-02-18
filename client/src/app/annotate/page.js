@@ -627,45 +627,139 @@ function AnnotationToolContent() {
           <div className="border-r border-white/5 bg-zinc-950/60 flex flex-col h-full">
 
             {/* Filter Section */}
-            <div className="p-3 border-b border-white/5">
-              <h3 className="font-medium text-xs text-gray-500 uppercase tracking-wider mb-2 px-1">Filter Images</h3>
-              <Select value={filterStatus} onValueChange={setFilterStatus}>
-                <SelectTrigger className="w-full h-8 text-xs bg-white/5 border-white/10">
-                  <SelectValue placeholder="Filter status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">
-                    <div className="flex items-center justify-between w-full min-w-[140px]">
-                      <span>All Images</span>
-                      <span className="text-xs text-muted-foreground ml-2">{counts.all}</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="unlabeled">
-                    <div className="flex items-center justify-between w-full min-w-[140px]">
-                      <span className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-gray-500" /> Unlabeled</span>
-                      <span className="text-xs text-muted-foreground ml-2">{counts.unlabeled}</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="predicted">
-                    <div className="flex items-center justify-between w-full min-w-[140px]">
-                      <span className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-purple-500" /> Predicted</span>
-                      <span className="text-xs text-muted-foreground ml-2">{counts.predicted}</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="annotated">
-                    <div className="flex items-center justify-between w-full min-w-[140px]">
-                      <span className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-indigo-500" /> Annotated</span>
-                      <span className="text-xs text-muted-foreground ml-2">{counts.annotated}</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="reviewed">
-                    <div className="flex items-center justify-between w-full min-w-[140px]">
-                      <span className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Reviewed</span>
-                      <span className="text-xs text-muted-foreground ml-2">{counts.reviewed}</span>
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="p-3 border-b border-white/5 space-y-3">
+              <div>
+                <h3 className="font-medium text-xs text-gray-500 uppercase tracking-wider mb-2 px-1">Filter Images</h3>
+                <Select value={filterStatus} onValueChange={setFilterStatus}>
+                  <SelectTrigger className="w-full h-8 text-xs bg-white/5 border-white/10">
+                    <SelectValue placeholder="Filter status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">
+                      <div className="flex items-center justify-between w-full min-w-[140px]">
+                        <span>All Images</span>
+                        <span className="text-xs text-muted-foreground ml-2">{counts.all}</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="unlabeled">
+                      <div className="flex items-center justify-between w-full min-w-[140px]">
+                        <span className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-gray-500" /> Unlabeled</span>
+                        <span className="text-xs text-muted-foreground ml-2">{counts.unlabeled}</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="predicted">
+                      <div className="flex items-center justify-between w-full min-w-[140px]">
+                        <span className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-purple-500" /> Predicted</span>
+                        <span className="text-xs text-muted-foreground ml-2">{counts.predicted}</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="annotated">
+                      <div className="flex items-center justify-between w-full min-w-[140px]">
+                        <span className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-indigo-500" /> Annotated</span>
+                        <span className="text-xs text-muted-foreground ml-2">{counts.annotated}</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="reviewed">
+                      <div className="flex items-center justify-between w-full min-w-[140px]">
+                        <span className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Reviewed</span>
+                        <span className="text-xs text-muted-foreground ml-2">{counts.reviewed}</span>
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Quick Train Button */}
+              <div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full h-8 text-xs border-dashed border-white/20 hover:border-emerald-500/50 hover:bg-emerald-500/10 hover:text-emerald-400 mb-2"
+                  onClick={async () => {
+                    if (!datasetId) return;
+                    const toastId = toast.loading("Starting micro-training...");
+                    try {
+                      const formData = new FormData();
+                      // dataset_yaml is handled by backend for existing datasets
+                      formData.append("dataset_id", datasetId);
+                      formData.append("model_name", "yolov8n.pt");
+                      formData.append("epochs", "10"); // Micro training
+                      formData.append("batch_size", "16");
+                      formData.append("img_size", "416"); // Smaller for speed
+                      formData.append("device", "cpu"); // Force CPU if needed or auto
+
+                      // We need a way to tell backend to use existing dataset content
+                      // For now, let's assume standard training endpoint handles 'dataset_id' 
+                      // If not, we might need a specific/new endpoint or modify the existing one.
+                      // Let's modify the existing start endpoint to accept dataset_id instead of yaml upload
+
+                      const res = await fetch("http://localhost:8000/api/training/start-micro", {
+                        method: "POST",
+                        body: formData // Content-Type header specific for FormData not needed, browser sets it
+                      });
+
+                      if (res.ok) {
+                        const data = await res.json();
+                        toast.dismiss(toastId);
+                        toast.success(`Micro-training started! (Job: ${data.job_id})`);
+                      } else {
+                        throw new Error("Failed to start");
+                      }
+                    } catch (e) {
+                      console.error(e);
+                      toast.dismiss(toastId);
+                      toast.error("Failed to start micro-training");
+                    }
+                  }}
+                >
+                  <Cpu className="w-3 h-3 mr-1.5" />
+                  Train Assistant (10 ep)
+                </Button>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full h-8 text-xs border-dashed border-white/20 hover:border-indigo-500/50 hover:bg-indigo-500/10 hover:text-indigo-400"
+                  onClick={async () => {
+                    if (!datasetId) return;
+                    const toastId = toast.loading("Analyzing dataset uncertainty...");
+                    try {
+                      // Fetch sorted images from backend
+                      const res = await fetch(`http://localhost:8000/api/annotations/datasets/${datasetId}/uncertainty`);
+                      const data = await res.json();
+
+                      if (data.success && data.images.length > 0) {
+                        // Create a map of filename -> uncertainty score
+                        const uncertaintyMap = new Map(data.images.map(img => [img.filename, img.uncertainty_score]));
+
+                        // Sort current images based on the uncertainty map
+                        // Images not in the map (labeled ones) go to the end
+                        const sorted = [...images].sort((a, b) => {
+                          const scoreA = uncertaintyMap.get(a.filename) ?? -1;
+                          const scoreB = uncertaintyMap.get(b.filename) ?? -1;
+                          return scoreB - scoreA; // Descending
+                        });
+
+                        setImages(sorted);
+                        setCurrentImageIndex(0);
+                        setFilterStatus('unlabeled'); // Switch to unlabeled to see the sorted ones
+                        toast.dismiss(toastId);
+                        toast.success(`Sorted by uncertainty! (${data.analyzed_count} images analyzed)`);
+                      } else {
+                        toast.dismiss(toastId);
+                        toast.info("No unlabeled images to analyze");
+                      }
+                    } catch (e) {
+                      console.error(e);
+                      toast.dismiss(toastId);
+                      toast.error("Failed to analyze uncertainty");
+                    }
+                  }}
+                >
+                  <Sparkles className="w-3 h-3 mr-1.5" />
+                  Active Learning Sort
+                </Button>
+              </div>
             </div>
 
             <div className="p-3 overflow-y-auto custom-scrollbar flex-1 space-y-4">
