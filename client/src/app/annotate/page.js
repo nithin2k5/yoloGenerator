@@ -1,4 +1,5 @@
 "use client";
+// Force update
 
 import { useState, useEffect, useRef, useCallback, Suspense, useMemo } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
@@ -11,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import AutoLabelModal from "@/components/project/AutoLabelModal";
 import {
   Save, Trash2, Upload, ChevronLeft, ChevronRight, Home,
-  Download, ZoomIn, ZoomOut, RotateCcw, Maximize, Check, Copy, Clipboard, Sparkles
+  Download, ZoomIn, ZoomOut, RotateCcw, Maximize, Check, Copy, Clipboard, Sparkles, Cpu
 } from "lucide-react";
 
 function AnnotationToolContent() {
@@ -293,13 +294,65 @@ function AnnotationToolContent() {
     };
   };
 
-  const handleMouseDown = (e) => {
+  const [isSmartMode, setIsSmartMode] = useState(false);
+
+  const handleMouseDown = async (e) => {
     e.preventDefault();
     if (!canvasRef.current || !dataset) return;
     const { x, y } = getCanvasCoordinates(e);
+
+    if (isSmartMode) {
+      // Smart Segment Logic
+      if (!datasetId || !images[currentImageIndex]) return;
+
+      const toastId = toast.loading("Segmenting...");
+      try {
+        const formData = new FormData();
+        formData.append("dataset_id", datasetId);
+        formData.append("image_id", images[currentImageIndex].id);
+
+        // Send normalized coordinates
+        const img = imageRef.current;
+        formData.append("x", x / img.naturalWidth);
+        formData.append("y", y / img.naturalHeight);
+
+        const res = await fetch("http://localhost:8000/api/smart/segment", {
+          method: "POST",
+          body: formData
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && data.box) {
+            // Add the smart box
+            const newBox = {
+              ...data.box,
+              class_id: selectedClass,
+              class_name: dataset.classes[selectedClass] || "object"
+            };
+
+            setBoxHistory(prev => [...prev, boxes]);
+            setBoxes(prev => [...prev, newBox]);
+            toast.dismiss(toastId);
+            toast.success("Object segmented!");
+          } else {
+            toast.dismiss(toastId);
+            toast.error("Could not segment object");
+          }
+        } else {
+          throw new Error("Server error");
+        }
+      } catch (e) {
+        console.error(e);
+        toast.dismiss(toastId);
+        toast.error("Smart segment failed");
+      }
+      return;
+    }
+
     setIsDrawing(true);
     setStartPos({ x, y });
-    setCurrentBox({ x, y, width: 0, height: 0 });
+    setCurrentBox({ x, y, width: 0, height: 0, class_id: selectedClass });
   };
 
   const handleMouseMove = (e) => {
@@ -322,13 +375,18 @@ function AnnotationToolContent() {
     const height = y - startPos.y;
 
     if (Math.abs(width) > 10 && Math.abs(height) > 10) {
+      // Safety check for class name
+      const className = (dataset.classes && dataset.classes[selectedClass])
+        ? dataset.classes[selectedClass]
+        : `class_${selectedClass}`;
+
       const normalizedBox = {
         x: width < 0 ? startPos.x + width : startPos.x,
         y: height < 0 ? startPos.y + height : startPos.y,
         width: Math.abs(width),
         height: Math.abs(height),
         class_id: selectedClass,
-        class_name: dataset.classes[selectedClass]
+        class_name: className
       };
 
       setBoxHistory(prev => [...prev, boxes]);
@@ -434,12 +492,37 @@ function AnnotationToolContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentImageIndex]);
 
+  // Auto-save when boxes change (debounced)
+  useEffect(() => {
+    if (boxes.length === 0 && reviewStatus === 'unlabeled') return; // Don't save empty if already unlabeled
+
+    // Skip initial load
+    if (saveStatus === 'saved' || saveStatus === 'loading') return;
+
+    const timeoutId = setTimeout(() => {
+      if (datasetId && images[currentImageIndex]) {
+        handleSaveAnnotations();
+      }
+    }, 1000); // 1s debounce
+
+    return () => clearTimeout(timeoutId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [boxes]);
+
   const handleSaveAnnotations = async (statusOverride = null) => {
     if (!images[currentImageIndex] || !dataset) return false;
     setSaveStatus('saving');
 
     const naturalWidth = imageRef.current?.naturalWidth || 0;
     const naturalHeight = imageRef.current?.naturalHeight || 0;
+
+    // Safety check: Don't save if dimensions are invalid (prevent div by zero in backend)
+    if (naturalWidth === 0 || naturalHeight === 0) {
+      console.warn("Cannot save annotations: Image dimensions not available");
+      setSaveStatus(null);
+      return false;
+    }
+
     const img = images[currentImageIndex];
 
     // Determine status: if override provided use it, otherwise keep current status unless it was 'predicted'/'unlabeled' then promote to 'annotated'
@@ -453,7 +536,7 @@ function AnnotationToolContent() {
     }
 
     try {
-      const response = await fetch(`http://localhost:8000/api/annotations/annotations/save`, {
+      const response = await fetch(`http://localhost:8000/api/annotations/save`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -760,6 +843,23 @@ function AnnotationToolContent() {
                   Active Learning Sort
                 </Button>
               </div>
+
+              {/* Smart Mode Toggle */}
+              <div className="pt-2 border-t border-white/5">
+                <Button
+                  variant={isSmartMode ? "default" : "outline"}
+                  size="sm"
+                  className={`w-full h-8 text-xs ${isSmartMode ? "bg-purple-600 hover:bg-purple-500 text-white border-transparent" : "border-dashed border-white/20 text-gray-400"}`}
+                  onClick={() => setIsSmartMode(!isSmartMode)}
+                >
+                  <Sparkles className={`w-3 h-3 mr-1.5 ${isSmartMode ? "text-white" : "text-purple-400"}`} />
+                  {isSmartMode ? "Smart Mode Active" : "Smart Mode Off"}
+                </Button>
+                <p className="text-[10px] text-gray-500 mt-1 text-center">
+                  {isSmartMode ? "Click an object to auto-segment" : "Switch to Smart Mode for auto-segmentation"}
+                </p>
+              </div>
+
             </div>
 
             <div className="p-3 overflow-y-auto custom-scrollbar flex-1 space-y-4">

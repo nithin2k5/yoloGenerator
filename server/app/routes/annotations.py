@@ -274,8 +274,9 @@ async def upload_images_to_dataset(
     
     return JSONResponse(content=response_data)
 
-@router.post("/annotations/save")
-async def save_annotation(request: dict):
+@router.post("/save")
+@router.post("/annotations/save")  # Legacy alias to handle potential caching/old frontend
+async def save_annotation(request: dict = Body(...)):
     """
     Save image annotations
     """
@@ -333,11 +334,20 @@ async def save_annotation(request: dict):
     with open(label_file, 'w') as f:
         for box in boxes:
             # Convert to YOLO format (class_id center_x center_y width height)
+            if width <= 0 or height <= 0:
+                continue
+                
             # Normalize coordinates to 0-1
             center_x = (box["x"] + box["width"] / 2) / width
             center_y = (box["y"] + box["height"] / 2) / height
             norm_width = box["width"] / width
             norm_height = box["height"] / height
+            
+            # Clamp values to 0-1 range to be safe
+            center_x = max(0.0, min(1.0, center_x))
+            center_y = max(0.0, min(1.0, center_y))
+            norm_width = max(0.0, min(1.0, norm_width))
+            norm_height = max(0.0, min(1.0, norm_height))
             
             f.write(f"{box['class_id']} {center_x} {center_y} {norm_width} {norm_height}\n")
     

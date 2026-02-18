@@ -8,7 +8,7 @@ import uvicorn
 import os
 from pathlib import Path
 
-from app.routes import inference, training, models as model_routes, annotations, auth, annotations_analyze
+from app.routes import inference, training, models as model_routes, annotations, auth, annotations_analyze, smart_annotation
 from database import initialize_database
 
 
@@ -45,11 +45,12 @@ datasets_dir.mkdir(exist_ok=True)
 
 # Include routers
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
-app.include_router(inference.router, prefix="/api/inference", tags=["inference"])
-app.include_router(training.router, prefix="/api/training", tags=["training"])
+app.include_router(inference.router, prefix="/api/inference", tags=["Inference"])
+app.include_router(training.router, prefix="/api/training", tags=["Analysis"])
 app.include_router(model_routes.router, prefix="/api/models", tags=["models"])
-app.include_router(annotations.router, prefix="/api/annotations", tags=["annotations"])
-app.include_router(annotations_analyze.router, prefix="/api/annotations", tags=["annotations"])
+app.include_router(annotations.router, prefix="/api/annotations", tags=["Annotations"])
+app.include_router(annotations_analyze.router, prefix="/api/annotations", tags=["Annotations"])
+app.include_router(smart_annotation.router, prefix="/api/smart", tags=["Smart Tools"])
 
 @app.get("/")
 async def root():

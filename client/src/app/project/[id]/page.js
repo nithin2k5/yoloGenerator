@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { API_ENDPOINTS } from "@/lib/config";
-import { ArrowLeft, Upload, Image, Cpu, Layers, Code, Grid } from "lucide-react";
+import { ArrowLeft, Upload, Image, Cpu, Layers, Code, Grid, Activity } from "lucide-react";
 import { toast } from 'sonner';
 
 // Components for each tab
@@ -17,6 +17,7 @@ import ProjectAnnotate from "@/components/project/ProjectAnnotate";
 import ProjectGenerate from "@/components/project/ProjectGenerate";
 import ProjectTrain from "@/components/project/ProjectTrain";
 import ProjectDeploy from "@/components/project/ProjectDeploy";
+import ProjectHealth from "@/components/project/ProjectHealth"; // NEW
 
 export default function ProjectPage() {
     const params = useParams();
@@ -123,6 +124,13 @@ export default function ProjectPage() {
             icon: Code,
             status: 'pending',
             meta: 'Not Deployed'
+        },
+        {
+            id: 'health',
+            label: 'Health',
+            icon: Activity,
+            status: 'pending', // You might want to add logic here based on dataset health
+            meta: 'No Issues' // Or a summary of health status
         }
     ];
 
@@ -163,8 +171,8 @@ export default function ProjectPage() {
                             className={`flex flex-col items-center gap-2 cursor-pointer group bg-background px-4 py-2 rounded-xl border transition-all hover:scale-105 ${activeTab === stage.id ? 'border-primary ring-2 ring-primary/20' : 'border-border'}`}
                         >
                             <div className={`w-10 h-10 rounded-full flex items-center justify-center border-2 ${stage.status === 'complete' ? 'bg-green-500/10 border-green-500 text-green-500' :
-                                    stage.status === 'inprogress' ? 'bg-amber-500/10 border-amber-500 text-amber-500' :
-                                        'bg-muted border-muted-foreground/30 text-muted-foreground'
+                                stage.status === 'inprogress' ? 'bg-amber-500/10 border-amber-500 text-amber-500' :
+                                    'bg-muted border-muted-foreground/30 text-muted-foreground'
                                 }`}>
                                 <stage.icon className="w-5 h-5" />
                             </div>
@@ -214,6 +222,10 @@ export default function ProjectPage() {
 
                         <TabsContent value="deploy" className="mt-0 h-full">
                             <ProjectDeploy dataset={dataset} />
+                        </TabsContent>
+
+                        <TabsContent value="health" className="mt-0 h-full">
+                            <ProjectHealth params={params} />
                         </TabsContent>
                     </div>
                 </div>
