@@ -8,8 +8,8 @@ import uvicorn
 import os
 from pathlib import Path
 
-from app.routes import inference, training, models as model_routes, annotations, auth, annotations_analyze, smart_annotation
-from database import initialize_database
+from app.api.v1.endpoints import inference, training, models as model_routes, annotations, auth, annotations_analyze, smart_annotation
+from app.db.session import initialize_database
 
 
 @asynccontextmanager

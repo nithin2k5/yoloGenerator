@@ -24,6 +24,8 @@ function AnnotationToolContent() {
   const [images, setImages] = useState([]);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [boxes, setBoxes] = useState([]);
+  const boxesRef = useRef([]);
+  const latestImageIndexRequested = useRef(currentImageIndex);
   const [boxHistory, setBoxHistory] = useState([]);
   const [selectedClass, setSelectedClass] = useState(0);
   const [isDrawing, setIsDrawing] = useState(false);
@@ -94,6 +96,7 @@ function AnnotationToolContent() {
 
   useEffect(() => {
     if (images.length > 0 && currentImageIndex < images.length) {
+      latestImageIndexRequested.current = currentImageIndex;
       loadImage(currentImageIndex);
       setZoom(1);
     }
@@ -147,6 +150,7 @@ function AnnotationToolContent() {
           if ((e.ctrlKey || e.metaKey) && boxHistory.length > 0) {
             e.preventDefault();
             const lastState = boxHistory[boxHistory.length - 1];
+            boxesRef.current = lastState;
             setBoxes(lastState);
             setBoxHistory(prev => prev.slice(0, -1));
             showToast('Undo successful');
@@ -167,8 +171,10 @@ function AnnotationToolContent() {
           if (e.ctrlKey || e.metaKey) {
             e.preventDefault();
             if (copiedBoxes && copiedBoxes.length > 0) {
-              setBoxHistory(prev => [...prev, boxes]);
-              setBoxes(prev => [...prev, ...copiedBoxes]);
+              setBoxHistory(prev => [...prev, boxesRef.current]);
+              const newBoxes = [...boxesRef.current, ...copiedBoxes];
+              boxesRef.current = newBoxes;
+              setBoxes(newBoxes);
               showToast(`Pasted ${copiedBoxes.length} annotations`);
             }
           }
@@ -204,23 +210,37 @@ function AnnotationToolContent() {
 
   const loadImage = async (index) => {
     if (!images[index] || !datasetId) return;
+
+    // Instantly wipe old annotations synchronously so they don't ghost
+    // over the new image while the network request is pending
+    boxesRef.current = [];
+    setBoxes([]);
+    setBoxHistory([]);
+    setReviewStatus('unlabeled');
+
     const img = images[index];
     try {
       const response = await fetch(`http://localhost:8000/api/annotations/annotations/${datasetId}/${img.id}`);
+      if (latestImageIndexRequested.current !== index) return;
       if (response.ok) {
         const data = await response.json();
-        setBoxes(data.boxes || []);
+        const fetchedBoxes = data.boxes || [];
+        boxesRef.current = fetchedBoxes;
+        setBoxes(fetchedBoxes);
         setReviewStatus(data.status || 'annotated');
       } else {
+        boxesRef.current = [];
         setBoxes([]);
         setReviewStatus('unlabeled');
       }
     } catch (error) {
-      setBoxes([]);
-      setReviewStatus('unlabeled');
+      if (latestImageIndexRequested.current === index) {
+        boxesRef.current = [];
+        setBoxes([]);
+        setReviewStatus('unlabeled');
+      }
     }
     setSelectedSplit(img.split || null);
-    setBoxHistory([]);
   };
 
   const handleUploadImages = async (e) => {
@@ -331,8 +351,10 @@ function AnnotationToolContent() {
               class_name: dataset.classes[selectedClass] || "object"
             };
 
-            setBoxHistory(prev => [...prev, boxes]);
-            setBoxes(prev => [...prev, newBox]);
+            setBoxHistory(prev => [...prev, boxesRef.current]);
+            const newBoxes = [...boxesRef.current, newBox];
+            boxesRef.current = newBoxes;
+            setBoxes(newBoxes);
             toast.dismiss(toastId);
             toast.success("Object segmented!");
           } else {
@@ -389,8 +411,10 @@ function AnnotationToolContent() {
         class_name: className
       };
 
-      setBoxHistory(prev => [...prev, boxes]);
-      setBoxes(prevBoxes => [...prevBoxes, normalizedBox]);
+      setBoxHistory(prev => [...prev, boxesRef.current]);
+      const newBoxes = [...boxesRef.current, normalizedBox];
+      boxesRef.current = newBoxes;
+      setBoxes(newBoxes);
       setTimeout(() => { setCurrentBox(null); drawCanvas(); }, 0);
     } else {
       setCurrentBox(null);
@@ -427,8 +451,8 @@ function AnnotationToolContent() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-      // Draw existing boxes with colored fills
-      boxes.forEach((box) => {
+      // Draw existing boxes with colored fills using the latest ref state
+      boxesRef.current.forEach((box) => {
         const color = getClassColor(box.class_id);
 
         // Semi-transparent fill
@@ -527,10 +551,12 @@ function AnnotationToolContent() {
 
     // Determine status: if override provided use it, otherwise keep current status unless it was 'predicted'/'unlabeled' then promote to 'annotated'
     let newStatus = statusOverride || reviewStatus;
+    const currentBoxesToSave = boxesRef.current;
+
     if (!statusOverride) {
-      if (boxes.length > 0 && (reviewStatus === 'unlabeled' || reviewStatus === 'predicted')) {
+      if (currentBoxesToSave.length > 0 && (reviewStatus === 'unlabeled' || reviewStatus === 'predicted')) {
         newStatus = 'annotated';
-      } else if (boxes.length === 0) {
+      } else if (currentBoxesToSave.length === 0) {
         newStatus = 'unlabeled';
       }
     }
@@ -545,7 +571,7 @@ function AnnotationToolContent() {
           image_name: img.filename,
           width: naturalWidth || 0,
           height: naturalHeight || 0,
-          boxes: boxes,
+          boxes: currentBoxesToSave,
           split: selectedSplit || null,
           status: newStatus
         })
@@ -594,8 +620,10 @@ function AnnotationToolContent() {
   };
 
   const handleDeleteBox = (index) => {
-    setBoxHistory(prev => [...prev, boxes]);
-    setBoxes(boxes.filter((_, i) => i !== index));
+    setBoxHistory(prev => [...prev, boxesRef.current]);
+    const newBoxes = boxesRef.current.filter((_, i) => i !== index);
+    boxesRef.current = newBoxes;
+    setBoxes(newBoxes);
   };
 
   const handleZoom = (delta) => {
@@ -695,7 +723,7 @@ function AnnotationToolContent() {
                 </Badge>
               )}
               <Badge className="bg-indigo-500/20 text-indigo-300 border-indigo-500/30 text-xs">
-                {boxes.length} box{boxes.length !== 1 ? 'es' : ''}
+                {boxesRef.current.length} box{boxesRef.current.length !== 1 ? 'es' : ''}
               </Badge>
             </div>
           </div>

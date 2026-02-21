@@ -7,8 +7,8 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, EmailStr
 from typing import Optional
 import mysql.connector
-from database import get_db_connection
-from rbac import (
+from app.db.session import get_db_connection
+from app.core.rbac import (
     hash_password, 
     verify_password, 
     create_access_token, 

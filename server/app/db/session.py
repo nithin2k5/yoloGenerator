@@ -152,6 +152,45 @@ def create_tables():
             )
         """)
         print("✓ Table 'annotations' ready")
+
+        # Dataset Versions table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS dataset_versions (
+                id VARCHAR(255) PRIMARY KEY,
+                dataset_id VARCHAR(255) NOT NULL,
+                version_number INT NOT NULL,
+                name VARCHAR(255),
+                preprocessing JSON,
+                augmentations JSON,
+                total_images INT DEFAULT 0,
+                yaml_path VARCHAR(500),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (dataset_id) REFERENCES datasets(id) ON DELETE CASCADE,
+                INDEX idx_dataset_id (dataset_id)
+            )
+        """)
+        print("✓ Table 'dataset_versions' ready")
+
+        # Dataset Version Images table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS dataset_version_images (
+                id VARCHAR(255) PRIMARY KEY,
+                version_id VARCHAR(255) NOT NULL,
+                original_image_id VARCHAR(255),
+                filename VARCHAR(255) NOT NULL,
+                path VARCHAR(500) NOT NULL,
+                split ENUM('train', 'val', 'test') DEFAULT 'train',
+                width INT NOT NULL,
+                height INT NOT NULL,
+                boxes JSON,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (version_id) REFERENCES dataset_versions(id) ON DELETE CASCADE,
+                FOREIGN KEY (original_image_id) REFERENCES dataset_images(id) ON DELETE SET NULL,
+                INDEX idx_version_id (version_id),
+                INDEX idx_split (split)
+            )
+        """)
+        print("✓ Table 'dataset_version_images' ready")
         
         # Training jobs table
         cursor.execute("""

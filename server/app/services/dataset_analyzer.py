@@ -37,7 +37,7 @@ except ImportError:
         variance = sum((x - m) ** 2 for x in values) / len(values)
         return variance ** 0.5
 
-from database_service import DatasetService, AnnotationService
+from app.services.database import DatasetService, AnnotationService
 
 logger = logging.getLogger(__name__)
 

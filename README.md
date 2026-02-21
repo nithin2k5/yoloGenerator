@@ -115,26 +115,20 @@ The platform features a sleek dark theme with violet accents:
 NebulaML/
 ├── server/
 │   ├── app/
-│   │   └── routes/
-│   │       ├── inference.py
-│   │       ├── training.py
-│   │       └── models.py
-│   ├── models/
-│   │   ├── inference.py
-│   │   └── trainer.py
+│   │   ├── api/
+│   │   │   └── v1/
+│   │   │       └── endpoints/
+│   │   ├── core/
+│   │   ├── db/
+│   │   └── services/
+│   ├── scripts/
 │   ├── main.py
 │   └── requirements.txt
 ├── client/
 │   ├── src/
 │   │   ├── app/
-│   │   │   ├── page.js
-│   │   │   ├── layout.js
-│   │   │   └── globals.css
-│   │   └── components/
-│   │       ├── DashboardStats.js
-│   │       ├── InferenceTab.js
-│   │       ├── TrainingTab.js
-│   │       └── ModelsTab.js
+│   │   ├── components/
+│   │   └── lib/
 │   ├── package.json
 │   └── tailwind.config.js
 └── start.sh

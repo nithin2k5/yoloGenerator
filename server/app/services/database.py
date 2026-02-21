@@ -5,7 +5,7 @@ Database service for dataset and annotation operations
 import json
 from typing import Dict, List, Optional, Any
 from datetime import datetime
-from database import get_db_connection
+from app.db.session import get_db_connection
 from mysql.connector import Error
 
 
@@ -440,3 +440,124 @@ class AnnotationService:
             if connection:
                 connection.close()
             return {}
+
+class DatasetVersionService:
+    """Service for dataset version database operations"""
+    
+    @staticmethod
+    def create_version(version_id: str, dataset_id: str, version_number: int,
+                       name: str = "", preprocessing: Dict = None, 
+                       augmentations: Dict = None, yaml_path: str = "") -> bool:
+        """Create a new dataset version snapshot"""
+        if preprocessing is None: preprocessing = {}
+        if augmentations is None: augmentations = {}
+        
+        connection = get_db_connection()
+        if not connection: return False
+        
+        try:
+            cursor = connection.cursor()
+            cursor.execute("""
+                INSERT INTO dataset_versions (id, dataset_id, version_number, name, preprocessing, augmentations, total_images, yaml_path)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """, (version_id, dataset_id, version_number, name, json.dumps(preprocessing), json.dumps(augmentations), 0, yaml_path))
+            connection.commit()
+            cursor.close()
+            connection.close()
+            return True
+        except Error as e:
+            print(f"Error creating dataset version: {e}")
+            if connection: connection.close()
+            return False
+
+    @staticmethod
+    def add_version_image(image_id: str, version_id: str, original_image_id: str, 
+                          filename: str, path: str, width: int, height: int, split: str = "train", boxes: List[Dict] = None) -> bool:
+        """Add an immutable processed image to a specific version"""
+        if boxes is None: boxes = []
+        connection = get_db_connection()
+        if not connection: return False
+        
+        try:
+            cursor = connection.cursor()
+            cursor.execute("""
+                INSERT INTO dataset_version_images (id, version_id, original_image_id, filename, path, split, width, height, boxes)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (image_id, version_id, original_image_id, filename, path, split, width, height, json.dumps(boxes)))
+            connection.commit()
+            
+            # Update total_images count
+            cursor.execute("""
+                UPDATE dataset_versions 
+                SET total_images = (SELECT COUNT(*) FROM dataset_version_images WHERE version_id = %s)
+                WHERE id = %s
+            """, (version_id, version_id))
+            connection.commit()
+            
+            cursor.close()
+            connection.close()
+            return True
+        except Error as e:
+            print(f"Error adding version image: {e}")
+            if connection: connection.close()
+            return False
+            
+    @staticmethod
+    def get_version(version_id: str) -> Optional[Dict]:
+        """Get dataset version by ID including images"""
+        connection = get_db_connection()
+        if not connection: return None
+        
+        try:
+            cursor = connection.cursor(dictionary=True)
+            cursor.execute("""
+                SELECT id, dataset_id, version_number, name, preprocessing, augmentations, total_images, yaml_path, created_at
+                FROM dataset_versions WHERE id = %s
+            """, (version_id,))
+            version = cursor.fetchone()
+            
+            if version:
+                version['preprocessing'] = json.loads(version['preprocessing']) if version['preprocessing'] else {}
+                version['augmentations'] = json.loads(version['augmentations']) if version['augmentations'] else {}
+                
+                cursor.execute("""
+                    SELECT id, original_image_id, filename, path, split, width, height, boxes, created_at
+                    FROM dataset_version_images WHERE version_id = %s
+                """, (version_id,))
+                images = cursor.fetchall()
+                for img in images:
+                    img['boxes'] = json.loads(img['boxes']) if img['boxes'] else []
+                version['images'] = images
+                
+            cursor.close()
+            connection.close()
+            return version
+        except Error as e:
+            print(f"Error getting dataset version: {e}")
+            if connection: connection.close()
+            return None
+            
+    @staticmethod
+    def list_dataset_versions(dataset_id: str) -> List[Dict]:
+        """List all versions for a specific dataset"""
+        connection = get_db_connection()
+        if not connection: return []
+        
+        try:
+            cursor = connection.cursor(dictionary=True)
+            cursor.execute("""
+                SELECT id, dataset_id, version_number, name, preprocessing, augmentations, total_images, yaml_path, created_at
+                FROM dataset_versions WHERE dataset_id = %s ORDER BY version_number ASC
+            """, (dataset_id,))
+            versions = cursor.fetchall()
+            cursor.close()
+            connection.close()
+            
+            for v in versions:
+                v['preprocessing'] = json.loads(v['preprocessing']) if v['preprocessing'] else {}
+                v['augmentations'] = json.loads(v['augmentations']) if v['augmentations'] else {}
+            return versions
+        except Error as e:
+            print(f"Error listing dataset versions: {e}")
+            if connection: connection.close()
+            return []

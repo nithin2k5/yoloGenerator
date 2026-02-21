@@ -6,8 +6,8 @@ import logging
 from dataclasses import asdict
 
 # Add parent directory to path for imports
-sys.path.append(str(Path(__file__).parent.parent.parent))
-from dataset_analyzer import DatasetAnalyzer
+# sys.path.append(str(Path(__file__).parent.parent.parent))
+from app.services.dataset_analyzer import DatasetAnalyzer
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -47,8 +47,8 @@ async def analyze_uncertainty(dataset_id: str):
     Uncertainty is calculated as 1.0 - max_confidence.
     """
     try:
-        from database_service import DatasetService
-        from models.inference import YOLOInference
+        from app.services.database import DatasetService
+        from app.services.inference import YOLOInference
         import os
 
         # Get dataset

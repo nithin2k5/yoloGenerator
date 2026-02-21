@@ -3,9 +3,13 @@ Script to create a sample user in the database
 Run this to create a test user for login
 """
 
-from database import get_db_connection, initialize_database
-from rbac import hash_password, Role
 import sys
+from pathlib import Path
+# Add server root to sys.path to allow imports from app
+sys.path.append(str(Path(__file__).parent.parent))
+
+from app.db.session import get_db_connection, initialize_database
+from app.core.rbac import hash_password, Role
 
 def create_sample_user():
     """Create a sample user in the database"""

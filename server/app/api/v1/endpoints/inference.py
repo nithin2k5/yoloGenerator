@@ -2,12 +2,11 @@ from fastapi import APIRouter, File, UploadFile, HTTPException, Form
 from fastapi.responses import JSONResponse
 from typing import List, Optional
 import os
-import shutil
+import io
 from pathlib import Path
-import tempfile
-import aiofiles
+from PIL import Image
 
-from models.inference import YOLOInference
+from app.services.inference import YOLOInference
 
 router = APIRouter()
 
@@ -56,25 +55,17 @@ async def predict_image(
                  inference_model = YOLOInference(model_path)
 
         
-        # Save uploaded file temporarily
-        temp_dir = Path(tempfile.gettempdir()) / "yolo_uploads"
-        temp_dir.mkdir(exist_ok=True)
-        
-        temp_file = temp_dir / file.filename
-        async with aiofiles.open(temp_file, 'wb') as out_file:
-            content = await file.read()
-            await out_file.write(content)
+        # Process image in memory
+        content = await file.read()
+        image = Image.open(io.BytesIO(content))
         
         # Run inference
         detections = inference_model.predict(
-            str(temp_file), 
+            image, 
             conf_threshold=confidence,
             agnostic_nms=agnostic_nms,
             augment=augment
         )
-        
-        # Clean up
-        os.remove(temp_file)
         
         return JSONResponse(content={
             "success": True,
@@ -102,23 +93,17 @@ async def predict_batch(
         if inference_model is None:
             inference_model = YOLOInference()
         
-        temp_dir = Path(tempfile.gettempdir()) / "yolo_uploads"
-        temp_dir.mkdir(exist_ok=True)
-        
         all_results = []
-        temp_files = []
+        images = []
         
-        # Save all files
+        # Read all files into memory
         for file in files:
-            temp_file = temp_dir / file.filename
-            async with aiofiles.open(temp_file, 'wb') as out_file:
-                content = await file.read()
-                await out_file.write(content)
-            temp_files.append(temp_file)
+            content = await file.read()
+            images.append(Image.open(io.BytesIO(content)))
         
         # Run batch inference
         all_detections = inference_model.predict_batch(
-            [str(f) for f in temp_files],
+            images,
             conf_threshold=confidence,
             agnostic_nms=agnostic_nms,
             augment=augment
@@ -131,10 +116,6 @@ async def predict_batch(
                 "detections": detections,
                 "num_detections": len(detections)
             })
-        
-        # Clean up
-        for temp_file in temp_files:
-            os.remove(temp_file)
         
         return JSONResponse(content={
             "success": True,
@@ -157,6 +138,17 @@ async def list_available_models():
             {"name": "yolov8m.pt", "size": "Medium", "description": "Good accuracy"},
             {"name": "yolov8l.pt", "size": "Large", "description": "High accuracy"},
             {"name": "yolov8x.pt", "size": "Extra Large", "description": "Highest accuracy, slowest"},
+            {"name": "yolov9t.pt", "size": "Tiny", "description": "YOLOv9 Tiny - fast and accurate"},
+            {"name": "yolov9s.pt", "size": "Small", "description": "YOLOv9 Small - balanced"},
+            {"name": "yolov9c.pt", "size": "Compact", "description": "YOLOv9 Compact"},
+            {"name": "yolov9e.pt", "size": "Extra Large", "description": "YOLOv9 Extended"},
+            {"name": "yolov10n.pt", "size": "Nano", "description": "YOLOv10 Nano"},
+            {"name": "yolov10s.pt", "size": "Small", "description": "YOLOv10 Small"},
+            {"name": "yolov10x.pt", "size": "Extra Large", "description": "YOLOv10 Extra Large"},
+            {"name": "yolo11n.pt", "size": "Nano", "description": "YOLO11 Nano - latest SOTA"},
+            {"name": "yolo11s.pt", "size": "Small", "description": "YOLO11 Small"},
+            {"name": "yolo11m.pt", "size": "Medium", "description": "YOLO11 Medium"},
+            {"name": "yolo11x.pt", "size": "Extra Large", "description": "YOLO11 Extra Large SOTA"},
         ]
     }
 

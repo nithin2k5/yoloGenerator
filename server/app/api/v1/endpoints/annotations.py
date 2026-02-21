@@ -21,8 +21,8 @@ import copy
 
 
 # Add parent directory to path for imports
-sys.path.append(str(Path(__file__).parent.parent.parent))
-from database_service import DatasetService, AnnotationService
+# sys.path.append(str(Path(__file__).parent.parent.parent))
+from app.services.database import DatasetService, AnnotationService
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

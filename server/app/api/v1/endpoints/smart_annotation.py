@@ -11,9 +11,10 @@ import sys
 import os
 
 # Add parent directory to path to find services
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+# Add parent directory to path to find services
+# sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from database_service import DatasetService
+from app.services.database import DatasetService
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

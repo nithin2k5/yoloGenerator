@@ -2,7 +2,8 @@ from fastapi import APIRouter, File, UploadFile, HTTPException, BackgroundTasks,
 from typing import Optional
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, validator
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
+from datetime import datetime
 import os
 import yaml
 from pathlib import Path
@@ -14,9 +15,10 @@ import sys
 import shutil
 
 # Import trainer
-from models.trainer import YOLOTrainer
-from dataset_analyzer import DatasetAnalyzer
-from database_service import DatasetService
+from app.services.trainer import YOLOTrainer
+from app.services.dataset_analyzer import DatasetAnalyzer
+from app.services.database import DatasetService, DatasetVersionService
+from app.services.versioning import VersioningEngine
 from utils.dataset_utils import split_dataset_stratified
 
 router = APIRouter()
@@ -53,9 +55,38 @@ class TrainingConfig(BaseModel):
         return v
 
 class DatasetTrainingRequest(BaseModel):
-    dataset_id: str
+    version_id: str
     config: TrainingConfig
     classes: Optional[List[str]] = None  # Optional list of class names to filter
+    
+class GenerateVersionRequest(BaseModel):
+    dataset_id: str
+    name: str = "Version 1"
+    preprocessing: Dict[str, Any] = {}
+    augmentations: Dict[str, Any] = {}
+    
+@router.post("/versions/generate")
+async def generate_dataset_version(request: GenerateVersionRequest):
+    """
+    Generate an immutable Roboflow-style version of a dataset 
+    with specific preprocessing and augmentations.
+    """
+    engine = VersioningEngine()
+    version_id = engine.generate_version(
+        dataset_id=request.dataset_id,
+        name=request.name,
+        preprocessing=request.preprocessing,
+        augmentations=request.augmentations
+    )
+    
+    if not version_id:
+        raise HTTPException(status_code=500, detail="Failed to generate dataset version")
+        
+    return {
+        "success": True,
+        "version_id": version_id,
+        "message": "Dataset version successfully generated constraints."
+    }
 
 @router.post("/start")
 async def start_training(
@@ -385,75 +416,14 @@ async def start_training_from_dataset(
         except Exception as e:
             logger.warning(f"Failed to analyze dataset: {e}")
 
-        # Check if dataset exists
-        dataset_path = Path(f"datasets/{request.dataset_id}")
-        yaml_path = dataset_path / "data.yaml"
+        version = DatasetVersionService.get_version(request.version_id)
+        if not version or not version.get('yaml_path'):
+            raise HTTPException(status_code=404, detail="Dataset version or generated YAML not found. Please generate a version first.")
+            
+        yaml_path = Path(version['yaml_path'])
         
-        # If dataset not exported, export it first
         if not yaml_path.exists():
-            logger.info(f"Dataset {request.dataset_id} not exported. Auto-exporting with stratified split...")
-            
-            # Get dataset
-            dataset = DatasetService.get_dataset(request.dataset_id)
-            if not dataset:
-                raise HTTPException(status_code=404, detail="Dataset not found")
-            
-            # Get annotated images
-            all_images = DatasetService.get_dataset_images(request.dataset_id)
-            annotated_images = [img for img in all_images if img.get("annotated", False)]
-            
-            if not annotated_images:
-                raise HTTPException(status_code=400, detail="No annotated images in dataset")
-            
-            # Perform stratified split
-            splits = split_dataset_stratified(annotated_images)
-            
-            # Create split directories and copy files
-            for split_name, images in splits.items():
-                split_dir = dataset_path / "split" / split_name
-                (split_dir / "images").mkdir(parents=True, exist_ok=True)
-                (split_dir / "labels").mkdir(parents=True, exist_ok=True)
-                
-                for img in images:
-                    src_img = dataset_path / "images" / img["filename"]
-                    dst_img = split_dir / "images" / img["filename"]
-                    if src_img.exists():
-                        shutil.copy2(src_img, dst_img)
-                    
-                    label_name = f"{Path(img['filename']).stem}.txt"
-                    src_label = dataset_path / "labels" / label_name
-                    dst_label = split_dir / "labels" / label_name
-                    if src_label.exists():
-                        shutil.copy2(src_label, dst_label)
-            
-            # Create data.yaml
-            split_path = (dataset_path / 'split').resolve()
-            yaml_content = f"""# YOLO Dataset Configuration
-# Generated from dataset: {dataset['name']}
-
-path: {split_path}
-train: train/images
-val: val/images
-test: test/images
-
-# Classes
-names:
-"""
-            for idx, class_name in enumerate(dataset["classes"]):
-                yaml_content += f"  {idx}: {class_name}\n"
-            yaml_content += f"\nnc: {len(dataset['classes'])}\n"
-            
-            with open(yaml_path, 'w') as f:
-                f.write(yaml_content)
-            
-            logger.info(f"Dataset {request.dataset_id} exported successfully")
-        
-        # Verify yaml exists now
-        if not yaml_path.exists():
-            raise HTTPException(
-                status_code=500,
-                detail="Failed to export dataset. YAML file not found."
-            )
+            raise HTTPException(status_code=404, detail="YAML file missing from disk.")
         
         # Generate job ID
         job_id = str(uuid.uuid4())
@@ -463,7 +433,7 @@ names:
             "status": "pending",
             "config": request.config.dict(),
             "progress": 0,
-            "dataset_id": request.dataset_id
+            "version_id": request.version_id
         }
         
         # Handle Class Filtering
@@ -539,75 +509,14 @@ async def export_and_train(
         except Exception as e:
             logger.warning(f"Failed to analyze dataset: {e}")
 
-        # First, export the dataset
-        dataset_path = Path(f"datasets/{request.dataset_id}")
-        yaml_path = dataset_path / "data.yaml"
+        version = DatasetVersionService.get_version(request.version_id)
+        if not version or not version.get('yaml_path'):
+            raise HTTPException(status_code=404, detail="Dataset version or generated YAML not found. Please generate a version first.")
+            
+        yaml_path = Path(version['yaml_path'])
         
-        # Check if already exported, if not export it
         if not yaml_path.exists():
-            logger.info(f"Dataset {request.dataset_id} not exported. Auto-exporting with stratified split...")
-            
-            # Get dataset
-            dataset = DatasetService.get_dataset(request.dataset_id)
-            if not dataset:
-                raise HTTPException(status_code=404, detail="Dataset not found")
-            
-            # Get annotated images
-            all_images = DatasetService.get_dataset_images(request.dataset_id)
-            annotated_images = [img for img in all_images if img.get("annotated", False)]
-            
-            if not annotated_images:
-                raise HTTPException(status_code=400, detail="No annotated images in dataset")
-            
-            # Perform stratified split
-            splits = split_dataset_stratified(annotated_images)
-            
-            # Create split directories and copy files
-            for split_name, images in splits.items():
-                split_dir = dataset_path / "split" / split_name
-                (split_dir / "images").mkdir(parents=True, exist_ok=True)
-                (split_dir / "labels").mkdir(parents=True, exist_ok=True)
-                
-                for img in images:
-                    src_img = dataset_path / "images" / img["filename"]
-                    dst_img = split_dir / "images" / img["filename"]
-                    if src_img.exists():
-                        shutil.copy2(src_img, dst_img)
-                    
-                    label_name = f"{Path(img['filename']).stem}.txt"
-                    src_label = dataset_path / "labels" / label_name
-                    dst_label = split_dir / "labels" / label_name
-                    if src_label.exists():
-                        shutil.copy2(src_label, dst_label)
-            
-            # Create data.yaml
-            split_path = (dataset_path / 'split').resolve()
-            yaml_content = f"""# YOLO Dataset Configuration
-# Generated from dataset: {dataset['name']}
-
-path: {split_path}
-train: train/images
-val: val/images
-test: test/images
-
-# Classes
-names:
-"""
-            for idx, class_name in enumerate(dataset["classes"]):
-                yaml_content += f"  {idx}: {class_name}\n"
-            yaml_content += f"\nnc: {len(dataset['classes'])}\n"
-            
-            with open(yaml_path, 'w') as f:
-                f.write(yaml_content)
-            
-            logger.info(f"Dataset {request.dataset_id} exported successfully for training")
-        
-        # Verify yaml exists now
-        if not yaml_path.exists():
-            raise HTTPException(
-                status_code=404,
-                detail="Dataset export failed. YAML file not found."
-            )
+            raise HTTPException(status_code=404, detail="YAML file missing from disk.")
         
         # Force strict training mode
         request.config.strict_epochs = True
@@ -620,7 +529,7 @@ names:
             "status": "pending",
             "config": request.config.dict(),
             "progress": 0,
-            "dataset_id": request.dataset_id,
+            "version_id": request.version_id,
             "strict_mode": True
         }
         
