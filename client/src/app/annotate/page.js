@@ -25,6 +25,7 @@ function AnnotationToolContent() {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [boxes, setBoxes] = useState([]);
   const boxesRef = useRef([]);
+  const isImageLoadingRef = useRef(true);
   const latestImageIndexRequested = useRef(currentImageIndex);
   const [boxHistory, setBoxHistory] = useState([]);
   const [selectedClass, setSelectedClass] = useState(0);
@@ -214,6 +215,7 @@ function AnnotationToolContent() {
     // Instantly wipe old annotations synchronously so they don't ghost
     // over the new image while the network request is pending
     boxesRef.current = [];
+    isImageLoadingRef.current = true;
     setBoxes([]);
     setBoxHistory([]);
     setReviewStatus('unlabeled');
@@ -238,6 +240,10 @@ function AnnotationToolContent() {
         boxesRef.current = [];
         setBoxes([]);
         setReviewStatus('unlabeled');
+      }
+    } finally {
+      if (latestImageIndexRequested.current === index) {
+        isImageLoadingRef.current = false;
       }
     }
     setSelectedSplit(img.split || null);
@@ -535,6 +541,11 @@ function AnnotationToolContent() {
 
   const handleSaveAnnotations = async (statusOverride = null) => {
     if (!images[currentImageIndex] || !dataset) return false;
+
+    // CRITICAL: If the image annotations are still loading from the API, 
+    // never auto-save since it would overwrite the DB with our temporary empty state!
+    if (isImageLoadingRef.current) return false;
+
     setSaveStatus('saving');
 
     const naturalWidth = imageRef.current?.naturalWidth || 0;
@@ -999,11 +1010,12 @@ function AnnotationToolContent() {
                 {/* Thumbnail Strip (Filtered) */}
                 <div className="h-16 flex items-center gap-1 px-4 overflow-x-auto custom-scrollbar">
                   {filteredImages.map((img, idx) => (
-                    <button
+                    <div
                       key={img.id}
                       onClick={async () => {
                         await handleSaveAnnotations();
-                        setCurrentImageIndex(img.originalIndex);
+                        const originalIdx = img.originalIndex;
+                        setCurrentImageIndex(originalIdx);
                       }}
                       className={`flex-shrink-0 w-12 h-12 rounded-lg overflow-hidden border-2 transition-all hover:opacity-100 relative ${img.originalIndex === currentImageIndex
                         ? 'border-indigo-500 opacity-100 scale-105'
@@ -1023,7 +1035,7 @@ function AnnotationToolContent() {
                             img.status === 'reviewed' ? 'bg-emerald-500' : 'bg-gray-500'
                           }`} />
                       )}
-                    </button>
+                    </div>
                   ))}
                   {filteredImages.length === 0 && (
                     <div className="w-full text-center text-xs text-gray-500 py-4">
