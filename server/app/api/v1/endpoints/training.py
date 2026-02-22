@@ -59,6 +59,10 @@ class DatasetTrainingRequest(BaseModel):
     config: TrainingConfig
     classes: Optional[List[str]] = None  # Optional list of class names to filter
     
+class ExportAndTrainRequest(BaseModel):
+    dataset_id: str
+    config: TrainingConfig
+
 class GenerateVersionRequest(BaseModel):
     dataset_id: str
     name: str = "Version 1"
@@ -493,7 +497,7 @@ async def start_training_from_dataset(
 @router.post("/export-and-train")
 async def export_and_train(
     background_tasks: BackgroundTasks,
-    request: DatasetTrainingRequest
+    request: ExportAndTrainRequest
 ):
     """
     Export dataset and start training in one operation (strict training mode)
@@ -509,14 +513,27 @@ async def export_and_train(
         except Exception as e:
             logger.warning(f"Failed to analyze dataset: {e}")
 
-        version = DatasetVersionService.get_version(request.version_id)
-        if not version or not version.get('yaml_path'):
-            raise HTTPException(status_code=404, detail="Dataset version or generated YAML not found. Please generate a version first.")
-            
-        yaml_path = Path(version['yaml_path'])
+        # Automatically generate a version for training
+        version_id = str(uuid.uuid4())
+        versions = DatasetVersionService.list_dataset_versions(request.dataset_id)
+        version_num = len(versions) + 1
+        name = f"Auto-Train v{version_num}"
         
-        if not yaml_path.exists():
-            raise HTTPException(status_code=404, detail="YAML file missing from disk.")
+        try:
+            yaml_path_str = VersioningEngine.create_version_from_dataset(
+                dataset_id=request.dataset_id,
+                version_id=version_id,
+                version_number=version_num,
+                name=name,
+                preprocessing={},
+                augmentations=request.config.augmentations or {}
+            )
+            yaml_path = Path(yaml_path_str)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to generate dataset version for training: {str(e)}")
+            
+        if not yaml_path or not yaml_path.exists():
+            raise HTTPException(status_code=404, detail="Failed to automatically generate YAML for training.")
         
         # Force strict training mode
         request.config.strict_epochs = True
@@ -529,7 +546,7 @@ async def export_and_train(
             "status": "pending",
             "config": request.config.dict(),
             "progress": 0,
-            "version_id": request.version_id,
+            "version_id": version_id,
             "strict_mode": True
         }
         
