@@ -514,26 +514,29 @@ async def export_and_train(
             logger.warning(f"Failed to analyze dataset: {e}")
 
         # Automatically generate a version for training
-        version_id = str(uuid.uuid4())
         versions = DatasetVersionService.list_dataset_versions(request.dataset_id)
         version_num = len(versions) + 1
         name = f"Auto-Train v{version_num}"
         
         try:
-            yaml_path_str = VersioningEngine.create_version_from_dataset(
+            engine = VersioningEngine()
+            new_version_id = engine.generate_version(
                 dataset_id=request.dataset_id,
-                version_id=version_id,
-                version_number=version_num,
                 name=name,
                 preprocessing={},
                 augmentations=request.config.augmentations or {}
             )
-            yaml_path = Path(yaml_path_str)
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Failed to generate dataset version for training: {str(e)}")
             
-        if not yaml_path or not yaml_path.exists():
-            raise HTTPException(status_code=404, detail="Failed to automatically generate YAML for training.")
+        if not new_version_id:
+            raise HTTPException(status_code=500, detail="Failed to automatically generate version for training.")
+            
+        version = DatasetVersionService.get_version(new_version_id)
+        if not version or not version.get('yaml_path'):
+            raise HTTPException(status_code=404, detail="Dataset version or generated YAML not found.")
+            
+        yaml_path = Path(version['yaml_path'])
         
         # Force strict training mode
         request.config.strict_epochs = True
@@ -546,7 +549,7 @@ async def export_and_train(
             "status": "pending",
             "config": request.config.dict(),
             "progress": 0,
-            "version_id": version_id,
+            "version_id": new_version_id,
             "strict_mode": True
         }
         

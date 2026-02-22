@@ -104,17 +104,26 @@ class VersioningEngine:
             class_labels = []
             
             for box in annotation['boxes']:
-                # Ensure width/height are positive and within [0, 1]
-                b_width = max(0.001, box['bbox_normalized'][2])
-                b_height = max(0.001, box['bbox_normalized'][3])
+                img_w = annotation.get('width', 1)
+                img_h = annotation.get('height', 1)
                 
-                bboxes.append([
-                    box['bbox_normalized'][0], 
-                    box['bbox_normalized'][1], 
-                    b_width, 
-                    b_height
-                ])
-                class_labels.append(box['class_id'])
+                if img_w <= 0 or img_h <= 0:
+                    continue
+                    
+                # Calculate normalized YOLO format coordinates
+                center_x = (box.get("x", 0) + box.get("width", 0) / 2) / img_w
+                center_y = (box.get("y", 0) + box.get("height", 0) / 2) / img_h
+                norm_width = box.get("width", 0) / img_w
+                norm_height = box.get("height", 0) / img_h
+                
+                # Clamp values to valid Albumentations [0, 1] bounds, ensuring width/height > 0
+                center_x = max(0.0, min(1.0, center_x))
+                center_y = max(0.0, min(1.0, center_y))
+                norm_width = max(0.001, min(1.0, norm_width))
+                norm_height = max(0.001, min(1.0, norm_height))
+                
+                bboxes.append([center_x, center_y, norm_width, norm_height])
+                class_labels.append(box.get('class_id', 0))
                 
             # Apply Transformation
             try:
